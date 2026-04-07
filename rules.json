@@ -1,31 +1,35 @@
 {
-  "watchlist": ["BTCUSD", "ETHUSD", "SOLUSD"],
-  "default_timeframe": "240",
+  "watchlist": ["TSX:SHOP", "TSX:BBD-B", "TSX:WPM", "TSX:CLS", "TSX:AEM", "TSX:CGG", "TSX:VNP"],
+  "default_timeframe": "D",
 
   "bias_criteria": {
     "bullish": [
-      "Ribbon direction is up (bullish colour)",
-      "Price is above the 20 EMA on the 4H",
-      "RSI is below 60 (room to run)"
+      "Price is above the 20 EMA and 50 EMA on the Daily",
+      "RSI is between 50 and 70 (momentum without overbought)",
+      "MACD histogram is positive and rising",
+      "Volume above 20-day average"
     ],
     "bearish": [
-      "Ribbon direction is down (bearish colour)",
-      "Price is below the 20 EMA on the 4H",
-      "RSI is above 40 (room to drop)"
+      "Price is below the 20 EMA and 50 EMA on the Daily",
+      "RSI is between 30 and 50 (weakness without oversold)",
+      "MACD histogram is negative and falling",
+      "Volume above average on down days"
     ],
     "neutral": [
-      "Ribbon is flat or mixed",
-      "Price is chopping around the 20 EMA",
-      "RSI is between 45 and 55"
+      "Price is between the 20 EMA and 50 EMA",
+      "RSI is between 45 and 55",
+      "MACD histogram is near zero or flat",
+      "No clear volume trend"
     ]
   },
 
   "risk_rules": [
     "Only take trades where R:R is at least 1:2",
-    "No trading in the first 15 minutes of the NY session open",
-    "Maximum 2 open positions at once",
-    "If I have 2 losing trades in a row, stop for the day"
+    "Maximum 3 open positions at once",
+    "Always set a stop loss at the nearest support/resistance level",
+    "If 2 losing trades in a row, reduce position size by 50%",
+    "TSX market hours: 9:30-16:00 ET"
   ],
 
-  "notes": "Add any other context you want Claude to factor in — e.g. macro events this week, key dates, anything that should affect your bias."
+  "notes": "Swing trading TSX equities. Focus: tech (SHOP, CLS), mining/gold (AEM, CGG, WPM, VNP), aerospace/defense (BBD-B). Watch gold prices for mining plays. Watch USD/CAD for cross-border impact on SHOP and CLS."
 }
