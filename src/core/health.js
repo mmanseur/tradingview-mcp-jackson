@@ -164,6 +164,7 @@ export async function launch({ port, kill_existing } = {}) {
   const killFirst = kill_existing !== false;
   const platform = process.platform;
 
+  // --- Step 1: Try native TradingView Desktop ---
   const pathMap = {
     darwin: [
       '/Applications/TradingView.app/Contents/MacOS/TradingView',
@@ -207,22 +208,80 @@ export async function launch({ port, kill_existing } = {}) {
     } catch { /* ignore */ }
   }
 
+  // --- Step 2: Fallback to browser (Edge or Chrome) with TradingView Web ---
+  let browserMode = false;
+  let browserName = null;
   if (!tvPath) {
-    throw new Error(`TradingView not found on ${platform}. Searched: ${candidates.join(', ')}. Launch manually with: /path/to/TradingView --remote-debugging-port=${cdpPort}`);
+    const browserPaths = platform === 'win32' ? [
+      { name: 'Edge', path: `${process.env['PROGRAMFILES(X86)']}\\Microsoft\\Edge\\Application\\msedge.exe` },
+      { name: 'Edge', path: `${process.env.PROGRAMFILES}\\Microsoft\\Edge\\Application\\msedge.exe` },
+      { name: 'Chrome', path: `${process.env.PROGRAMFILES}\\Google\\Chrome\\Application\\chrome.exe` },
+      { name: 'Chrome', path: `${process.env['PROGRAMFILES(X86)']}\\Google\\Chrome\\Application\\chrome.exe` },
+    ] : platform === 'darwin' ? [
+      { name: 'Chrome', path: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
+      { name: 'Edge', path: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge' },
+    ] : [
+      { name: 'Chrome', path: '/usr/bin/google-chrome' },
+      { name: 'Chrome', path: '/usr/bin/google-chrome-stable' },
+      { name: 'Edge', path: '/usr/bin/microsoft-edge' },
+    ];
+
+    for (const b of browserPaths) {
+      if (existsSync(b.path)) {
+        tvPath = b.path;
+        browserMode = true;
+        browserName = b.name;
+        break;
+      }
+    }
   }
 
+  if (!tvPath) {
+    throw new Error(`TradingView Desktop (standalone) not found, and no compatible browser (Edge/Chrome) found. Install the standalone TradingView Desktop or Chrome/Edge.`);
+  }
+
+  // Kill existing instances
   if (killFirst) {
     try {
-      if (platform === 'win32') execSync('taskkill /F /IM TradingView.exe', { timeout: 5000 });
-      else execSync('pkill -f TradingView', { timeout: 5000 });
+      if (browserMode) {
+        // Only kill browser instances that were launched with our CDP port
+        // Check if CDP is already active on our port
+        const http = await import('http');
+        const alreadyRunning = await new Promise((resolve) => {
+          http.get(`http://localhost:${cdpPort}/json/version`, (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => resolve(data));
+          }).on('error', () => resolve(null));
+        });
+        if (alreadyRunning) {
+          // CDP already active — reuse it
+          const info = JSON.parse(alreadyRunning);
+          return {
+            success: true, platform, binary: tvPath, mode: 'browser', browser_name: browserName,
+            cdp_port: cdpPort, cdp_url: `http://localhost:${cdpPort}`,
+            browser: info.Browser, reused: true,
+            note: 'CDP was already active, reusing existing session.',
+          };
+        }
+      } else {
+        if (platform === 'win32') execSync('taskkill /F /IM TradingView.exe', { timeout: 5000 });
+        else execSync('pkill -f TradingView', { timeout: 5000 });
+      }
       await new Promise(r => setTimeout(r, 1500));
     } catch { /* may not be running */ }
   }
 
-  const child = spawn(tvPath, [`--remote-debugging-port=${cdpPort}`], { detached: true, stdio: 'ignore' });
+  // Launch
+  const launchArgs = browserMode
+    ? [`--remote-debugging-port=${cdpPort}`, '--no-first-run', '--disable-default-apps', `--app=https://www.tradingview.com/chart/`]
+    : [`--remote-debugging-port=${cdpPort}`];
+
+  const child = spawn(tvPath, launchArgs, { detached: true, stdio: 'ignore' });
   child.unref();
 
-  for (let i = 0; i < 15; i++) {
+  // Wait for CDP to become available
+  for (let i = 0; i < 20; i++) {
     await new Promise(r => setTimeout(r, 1000));
     try {
       const http = await import('http');
@@ -237,8 +296,11 @@ export async function launch({ port, kill_existing } = {}) {
         const info = JSON.parse(ready);
         return {
           success: true, platform, binary: tvPath, pid: child.pid,
+          mode: browserMode ? 'browser' : 'desktop',
+          browser_name: browserMode ? browserName : 'TradingView Desktop',
           cdp_port: cdpPort, cdp_url: `http://localhost:${cdpPort}`,
           browser: info.Browser, user_agent: info['User-Agent'],
+          note: browserMode ? `TradingView Web launched in ${browserName} app mode with CDP enabled.` : undefined,
         };
       }
     } catch { /* retry */ }
@@ -246,6 +308,7 @@ export async function launch({ port, kill_existing } = {}) {
 
   return {
     success: true, platform, binary: tvPath, pid: child.pid, cdp_port: cdpPort, cdp_ready: false,
-    warning: 'TradingView launched but CDP not responding yet. It may still be loading. Try tv_health_check in a few seconds.',
+    mode: browserMode ? 'browser' : 'desktop',
+    warning: `${browserMode ? browserName : 'TradingView'} launched but CDP not responding yet. Try tv_health_check in a few seconds.`,
   };
 }
