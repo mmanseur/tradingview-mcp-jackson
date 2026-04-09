@@ -30,7 +30,6 @@ const BRIEFS_DIR = resolve(process.env.USERPROFILE || process.env.HOME, 'Desktop
 const INITIAL_CAPITAL = 10000;
 
 const TICKERS = [
-  { symbol: 'SHOP.TO', name: 'Shopify', sector: 'Tech' },
   { symbol: 'BBD-B.TO', name: 'Bombardier', sector: 'Aerospace' },
   { symbol: 'WPM.TO', name: 'Wheaton PM', sector: 'Mining/Gold' },
   { symbol: 'CLS.TO', name: 'Celestica', sector: 'Tech/Semis' },

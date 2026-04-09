@@ -17,7 +17,6 @@ const RISK_PCT = 0.03;
 const MAX_RISK = CAPITAL * RISK_PCT;
 
 const TICKERS = [
-  { symbol: 'SHOP.TO', name: 'Shopify', sector: 'Tech' },
   { symbol: 'BBD-B.TO', name: 'Bombardier', sector: 'Aerospace' },
   { symbol: 'WPM.TO', name: 'Wheaton PM', sector: 'Mining/Gold' },
   { symbol: 'CLS.TO', name: 'Celestica', sector: 'Tech/Semis' },

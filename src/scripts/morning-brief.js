@@ -19,7 +19,6 @@ const BRIEFS_DIR = resolve(process.env.USERPROFILE || process.env.HOME, 'Desktop
 
 // --- Config ---
 const WATCHLIST = [
-  { symbol: 'TSX:SHOP',  name: 'Shopify',                sector: 'Tech' },
   { symbol: 'TSX:BBD-B', name: 'Bombardier',             sector: 'Aerospace/Defense' },
   { symbol: 'TSX:WPM',   name: 'Wheaton Precious Metals', sector: 'Mining/Gold' },
   { symbol: 'TSX:CLS',   name: 'Celestica',              sector: 'Tech/Semis' },
