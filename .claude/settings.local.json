@@ -5,7 +5,18 @@
       "mcp__tradingview-mcp__chart_set_symbol",
       "mcp__tradingview-mcp__chart_set_timeframe",
       "WebSearch",
-      "Bash(python generate_report.py)"
+      "Bash(python generate_report.py)",
+      "Bash(ls /c/Users/mmans/swing_trading_bot/*.py /c/Users/mmans/swing_trading_bot/*.ts /c/Users/mmans/swing_trading_bot/*.css)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//c/Users/mmans/ibkr-mcp-server/**)",
+      "Bash(pip install:*)",
+      "Bash(python -m pip install -e .)",
+      "Bash(claude mcp:*)",
+      "mcp__ibkr__get_connection_status",
+      "mcp__ibkr__get_accounts",
+      "mcp__ibkr__get_portfolio",
+      "mcp__ibkr__get_account_summary",
+      "mcp__tradingview-mcp__tv_health_check"
     ],
     "additionalDirectories": [
       "c:\\Users\\mmans\\swing_trading_bot"
