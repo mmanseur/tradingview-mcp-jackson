@@ -4,7 +4,11 @@
       "Bash(node src/server.js)",
       "mcp__tradingview-mcp__chart_set_symbol",
       "mcp__tradingview-mcp__chart_set_timeframe",
-      "WebSearch"
+      "WebSearch",
+      "Bash(python generate_report.py)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\mmans\\swing_trading_bot"
     ]
   },
   "enableAllProjectMcpServers": true,
