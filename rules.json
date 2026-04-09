@@ -1,5 +1,5 @@
 {
-  "watchlist": ["TSX:SHOP", "TSX:BBD.B", "TSX:WPM", "TSX:CLS", "TSX:AEM", "TSX:CGG", "TSX:VNP"],
+  "watchlist": ["TSX:BBD.B", "TSX:WPM", "TSX:CLS", "TSX:AEM", "TSX:CGG", "TSX:VNP"],
   "default_timeframe": "D",
 
   "strategy": "Ichimoku V2 + RSI + Volume",
