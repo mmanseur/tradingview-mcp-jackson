@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node src/server.js)"
+      "Bash(node src/server.js)",
+      "mcp__tradingview-mcp__chart_set_symbol",
+      "mcp__tradingview-mcp__chart_set_timeframe",
+      "WebSearch"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "tradingview-mcp"
+  ]
 }

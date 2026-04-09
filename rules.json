@@ -1,35 +1,109 @@
 {
-  "watchlist": ["TSX:SHOP", "TSX:BBD-B", "TSX:WPM", "TSX:CLS", "TSX:AEM", "TSX:CGG", "TSX:VNP"],
+  "watchlist": ["TSX:SHOP", "TSX:BBD.B", "TSX:WPM", "TSX:CLS", "TSX:AEM", "TSX:CGG", "TSX:VNP"],
   "default_timeframe": "D",
 
+  "strategy": "Ichimoku V2 + RSI + Volume",
+
   "bias_criteria": {
-    "bullish": [
-      "Price is above the 20 EMA and 50 EMA on the Daily",
-      "RSI is between 50 and 70 (momentum without overbought)",
-      "MACD histogram is positive and rising",
-      "Volume above 20-day average"
+    "strong_buy": [
+      "Price is ABOVE the Ichimoku Cloud (Kumo)",
+      "Tenkan-sen > Kijun-sen (TK cross haussier)",
+      "RSI > 55 and rising",
+      "Volume > 1.5x 20-day average",
+      "Sector in uptrend"
     ],
-    "bearish": [
-      "Price is below the 20 EMA and 50 EMA on the Daily",
-      "RSI is between 30 and 50 (weakness without oversold)",
-      "MACD histogram is negative and falling",
-      "Volume above average on down days"
+    "buy": [
+      "Price is INSIDE the Ichimoku Cloud but rising toward top",
+      "Tenkan-sen crossing above Kijun-sen",
+      "RSI > 50",
+      "Volume > average",
+      "At least 3 of the 5 conditions met"
     ],
     "neutral": [
-      "Price is between the 20 EMA and 50 EMA",
-      "RSI is between 45 and 55",
-      "MACD histogram is near zero or flat",
-      "No clear volume trend"
+      "Price is inside the cloud with no clear direction",
+      "RSI between 45 and 55",
+      "Tenkan and Kijun are flat/tangled",
+      "Volume normal"
+    ],
+    "sell": [
+      "Price is BELOW the Ichimoku Cloud",
+      "Tenkan-sen < Kijun-sen (TK cross baissier)",
+      "RSI < 50 and falling",
+      "Cloud ahead is red (Lead 1 < Lead 2)"
+    ],
+    "strong_sell": [
+      "Price is well below the cloud",
+      "Tenkan-sen << Kijun-sen (big gap)",
+      "RSI < 40",
+      "Volume spike on down days",
+      "All 4 conditions met"
     ]
+  },
+
+  "ichimoku_rules": {
+    "entry": [
+      "Price must be IN or ABOVE the Kumo cloud",
+      "Tenkan > Kijun (bullish TK cross)",
+      "RSI > 50 and rising",
+      "Volume > 1.5x 20-day average on breakout day",
+      "Sector must be in overall uptrend"
+    ],
+    "exit": [
+      "Trailing stop hit (see trailing_stop_levels)",
+      "Tenkan crosses below Kijun WITH daily close below cloud",
+      "RSI drops below 40"
+    ],
+    "never_enter": [
+      "Price is BELOW the Kumo cloud",
+      "Tenkan < Kijun with widening gap",
+      "Sector in downtrend"
+    ]
+  },
+
+  "position_sizing": {
+    "strong_signal": "5% of capital",
+    "medium_signal": "3% of capital",
+    "weak_signal": "1.5% of capital"
+  },
+
+  "trailing_stop_levels": {
+    "+8%": "Move stop to breakeven (0%)",
+    "+15%": "Move stop to +8%",
+    "+25%": "Move stop to +15%",
+    "+40%": "Move stop to +25%"
   },
 
   "risk_rules": [
     "Only take trades where R:R is at least 1:2",
     "Maximum 3 open positions at once",
-    "Always set a stop loss at the nearest support/resistance level",
+    "Always set a stop loss BEFORE entering",
     "If 2 losing trades in a row, reduce position size by 50%",
+    "Max risk per trade: 3% of capital (300$ on 10K)",
     "TSX market hours: 9:30-16:00 ET"
   ],
 
-  "notes": "Swing trading TSX equities. Focus: tech (SHOP, CLS), mining/gold (AEM, CGG, WPM, VNP), aerospace/defense (BBD-B). Watch gold prices for mining plays. Watch USD/CAD for cross-border impact on SHOP and CLS."
+  "portfolio": {
+    "broker": "Interactive Brokers",
+    "account_id": "U22347486",
+    "currency": "CAD",
+    "net_liquidation_value": 7446.52,
+    "risk_pct": 0.03,
+    "max_risk_per_trade": 223,
+    "max_positions": 3,
+    "current_positions": [
+      {"symbol": "TSX:BBD.B", "side": "long", "qty": 18, "entry": 263.44, "last": 244.99, "pnl": -332, "pnl_pct": -7.0, "stop": 240, "signal_v2": "VENTE", "action": "COUPER - prix sous le nuage Ichimoku, TK cross baissier, depasse seuil de risque 3%"},
+      {"symbol": "TSX:SHOP", "side": "long", "qty": 7, "entry": 207.64, "last": 162.98, "pnl": -312, "pnl_pct": -21.5, "stop": 155, "signal_v2": "VENTE FORTE", "action": "VENDRE IMMEDIATEMENT - pire position, nuage epais bloque tout rebond, -21.5%"},
+      {"symbol": "TSX:CGG", "side": "long", "qty": 14, "entry": 25.05, "last": 29.17, "pnl": 57.68, "pnl_pct": 16.4, "stop": 26.50, "signal_v2": "NEUTRE", "action": "GARDER - dans le nuage, trailing stop 26.50, renforcer si breakout >33.44"},
+      {"symbol": "TSX:WPM", "side": "long", "qty": 7, "entry": 205.38, "last": 189.07, "pnl": -114, "pnl_pct": -7.9, "stop": 178, "signal_v2": "NEUTRE-HAUSSIER", "action": "GARDER - momentum fort, teste le haut du nuage 191.18, stop 178"}
+    ],
+    "pending_actions": [
+      "PRIORITE 1: Vendre SHOP au marche demain 9h30",
+      "PRIORITE 2: Vendre BBD.B au marche ou placer stop 240",
+      "PRIORITE 3: Acheter VNP 80 actions si signal confirme (au-dessus nuage + volume)",
+      "PRIORITE 4: Acheter CLS 3 actions si signal confirme",
+      "PRIORITE 5: Surveiller AEM pour breakout >295"
+    ]
+  },
+
+  "notes": "Swing trading TSX via Interactive Brokers. Strategy V2: Ichimoku Cloud + RSI + Volume filter. Compte IBKR U22347486 connecte a TradingView. Focus sectors: mining/gold (AEM, CGG, WPM, VNP) et tech de niche (CLS). VENDRE SHOP et BBD.B - sous le nuage, pertes depassent le seuil de risque. Watch gold prices for mining plays. Watch USD/CAD for cross-border impact."
 }
