@@ -1,0 +1,98 @@
+//@version=6
+indicator("Gold Momentum Pro", overlay = true, max_labels_count = 500)
+
+// ============================================================
+// Gold Momentum Pro — Indicator version (live signals)
+// Mirrors the Donchian turtle-style Strategy for WPM & gold stocks.
+// Outputs BRK, PB, ADD, EXIT, WEAK signals in the data window.
+// ============================================================
+
+// ---------- Inputs ----------
+emaFastLen     = input.int(13,  "EMA Fast",              minval=2,  group="EMAs")
+emaMidLen      = input.int(26,  "EMA Mid",               minval=5,  group="EMAs")
+emaSlowLen     = input.int(55,  "EMA Slow",              minval=10, group="EMAs")
+
+entryLookback  = input.int(55,  "Donchian Entry Lookback",   minval=20, group="Donchian")
+addLookback    = input.int(20,  "Donchian Add Lookback",     minval=5,  group="Donchian")
+exitLookback   = input.int(20,  "Donchian Exit Lookback",    minval=10, group="Donchian")
+
+atrLen         = input.int(14,  "ATR Length",            minval=5,  group="Risk")
+chandMult      = input.float(4.5, "Chandelier ATR Mult", step=0.1,  group="Risk")
+
+adxLen         = input.int(14,  "ADX Length",            minval=5,  group="Filters")
+adxThreshold   = input.float(20.0,"ADX Threshold",       step=1.0,  group="Filters")
+
+// ---------- Calculations ----------
+emaFast = ta.ema(close, emaFastLen)
+emaMid  = ta.ema(close, emaMidLen)
+emaSlow = ta.ema(close, emaSlowLen)
+atr = ta.atr(atrLen)
+
+[diPlus, diMinus, adx] = ta.dmi(adxLen, adxLen)
+
+entryHigh = ta.highest(high[1], entryLookback)
+addHigh   = ta.highest(high[1], addLookback)
+exitLow   = ta.lowest(low[1], exitLookback)
+
+chandelier = ta.highest(high, 22) - atr * chandMult
+
+alignedBull = emaFast > emaMid and emaMid > emaSlow
+adxOk = adx > adxThreshold
+
+// ---------- Signals (simulated state machine) ----------
+var bool  inVirtual      = false
+var float virtualEntry   = na
+var int   virtualEntryBar = 0
+var int   addsUsed       = 0
+
+isBreakout = close > entryHigh and alignedBull and adxOk and not inVirtual
+isPullback = close > emaFast and low < emaFast and close > entryHigh[5] and alignedBull and adxOk and not isBreakout and not inVirtual
+
+if (isBreakout or isPullback) and not inVirtual
+    inVirtual := true
+    virtualEntry := close
+    virtualEntryBar := bar_index
+    addsUsed := 0
+
+isAdd = inVirtual and close > addHigh and adxOk and addsUsed < 2 and bar_index - virtualEntryBar >= 10
+if isAdd
+    addsUsed := addsUsed + 1
+
+isExit = inVirtual and (close < exitLow or close < chandelier)
+if isExit
+    inVirtual := false
+    virtualEntry := na
+    addsUsed := 0
+
+isWeak = inVirtual and close < emaFast and not isExit
+
+// ---------- Plots ----------
+plot(emaFast,    title="EMA Fast",    color=color.new(color.yellow, 50))
+plot(emaMid,     title="EMA Mid",     color=color.new(color.orange, 50))
+plot(emaSlow,    title="EMA Slow",    color=color.new(color.red, 50))
+plot(entryHigh,  title="Donchian Hi", color=color.new(color.green, 0))
+plot(exitLow,    title="Donchian Lo", color=color.new(color.red, 0))
+plot(chandelier, title="Chandelier",  color=color.new(color.aqua, 0), style=plot.style_linebr)
+plot(adx,        title="ADX",         display=display.data_window)
+
+plot(isBreakout ? 1 : 0, title="BRK",           display=display.data_window)
+plot(isPullback ? 1 : 0, title="PB",            display=display.data_window)
+plot(isAdd      ? 1 : 0, title="ADD",           display=display.data_window)
+plot(isExit     ? 1 : 0, title="EXIT",          display=display.data_window)
+plot(isWeak     ? 1 : 0, title="WEAK",          display=display.data_window)
+plot(addsUsed,           title="Pyramid Count", display=display.data_window)
+
+if isBreakout
+    label.new(bar_index, low, "BRK", style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small)
+if isPullback
+    label.new(bar_index, low, "PB", style=label.style_label_up, color=color.lime, textcolor=color.black, size=size.small)
+if isAdd
+    label.new(bar_index, high, "ADD", style=label.style_label_down, color=color.blue, textcolor=color.white, size=size.small)
+if isExit
+    label.new(bar_index, high, "EXIT", style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
+
+// Alerts
+alertcondition(isBreakout, title="Gold Pro BRK", message="Gold Momentum Pro: BREAKOUT on {{ticker}}")
+alertcondition(isPullback, title="Gold Pro PB",  message="Gold Momentum Pro: PULLBACK entry on {{ticker}}")
+alertcondition(isAdd,      title="Gold Pro ADD", message="Gold Momentum Pro: ADD signal on {{ticker}}")
+alertcondition(isExit,     title="Gold Pro EXIT",message="Gold Momentum Pro: EXIT on {{ticker}}")
