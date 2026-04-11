@@ -1,0 +1,24 @@
+{
+  "description": "Univers de scan Momentum V4 — Watchlist perso + TSX 60",
+  "min_volume": 100000,
+  "watchlist": [
+    "TSX:BBD.B",
+    "TSX:WPM",
+    "TSX:CLS",
+    "TSX:AEM",
+    "TSX:VNP"
+  ],
+  "tsx60": [
+    "TSX:RY", "TSX:TD", "TSX:BNS", "TSX:BMO", "TSX:CM", "TSX:NA",
+    "TSX:ENB", "TSX:TRP", "TSX:CNQ", "TSX:SU", "TSX:IMO", "TSX:CVE", "TSX:TOU", "TSX:ARX",
+    "TSX:CNR", "TSX:CP", "TSX:WCN", "TSX:GFL",
+    "TSX:BN", "TSX:BAM", "TSX:IFC", "TSX:MFC", "TSX:SLF", "TSX:GWO", "TSX:POW", "TSX:FFH",
+    "TSX:ATD", "TSX:L", "TSX:MRU", "TSX:DOL", "TSX:WN", "TSX:GIL",
+    "TSX:BCE", "TSX:T", "TSX:RCI.B",
+    "TSX:AEM", "TSX:ABX", "TSX:FNV", "TSX:WPM", "TSX:K", "TSX:PAAS", "TSX:KL",
+    "TSX:NTR", "TSX:CCO", "TSX:FM", "TSX:TECK.B", "TSX:IVN", "TSX:LUN", "TSX:CCL.B",
+    "TSX:SHOP", "TSX:CSU", "TSX:OTEX", "TSX:GIB.A", "TSX:DSG", "TSX:KXS", "TSX:LSPD",
+    "TSX:BBD.B", "TSX:CAE", "TSX:MG", "TSX:WSP", "TSX:STN", "TSX:TIH", "TSX:TFII",
+    "TSX:H", "TSX:FTS", "TSX:EMA", "TSX:AQN"
+  ]
+}

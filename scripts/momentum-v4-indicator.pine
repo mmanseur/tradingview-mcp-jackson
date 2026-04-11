@@ -1,0 +1,171 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0
+// © Claude Code — Momentum V4 Indicator
+//@version=5
+indicator("Momentum V4", overlay=true, max_labels_count=200, max_lines_count=200)
+
+// ─── TICKER DETECTION ────────────────────────────────────────────────────────
+ticker = syminfo.ticker
+
+is_bbd  = str.contains(ticker, "BBD")
+is_wpm  = str.contains(ticker, "WPM")
+is_aem  = str.contains(ticker, "AEM")
+
+// ─── PARAMETERS PER TICKER ───────────────────────────────────────────────────
+// BBD-B : EMA 8/21/50, vol 1.3x, ATR stop 1.8x, TP 2.5/5.0, cooldown 3
+// WPM   : EMA 13/26/55, vol 2.0x, ATR stop 3.0x, TP 3.5/7.0, cooldown 6
+// AEM   : EMA 13/26/55, vol 2.2x, ATR stop 3.5x, TP 2.5/5.0, cooldown 10
+
+ema_fast   = is_bbd ? 8  : 13
+ema_mid    = is_bbd ? 21 : 26
+ema_slow   = is_bbd ? 50 : 55
+vol_mult   = is_bbd ? 1.3 : (is_wpm ? 2.0 : 2.2)
+atr_stop   = is_bbd ? 1.8 : (is_wpm ? 3.0 : 3.5)
+tp1_mult   = is_bbd ? 2.5 : (is_wpm ? 3.5 : 2.5)
+tp2_mult   = is_bbd ? 5.0 : (is_wpm ? 7.0 : 5.0)
+cooldown   = is_bbd ? 3   : (is_wpm ? 6   : 10)
+
+// Override inputs (manual mode)
+use_manual    = input.bool(false, "Override auto parameters")
+i_ema_fast    = input.int(8,   "EMA Fast",     group="Manual Override")
+i_ema_mid     = input.int(21,  "EMA Mid",      group="Manual Override")
+i_ema_slow    = input.int(50,  "EMA Slow",     group="Manual Override")
+i_vol_mult    = input.float(1.3,"Vol Multiplier", group="Manual Override")
+i_atr_stop    = input.float(1.8,"ATR Stop Mult",  group="Manual Override")
+i_tp1_mult    = input.float(2.5,"TP1 R:R",     group="Manual Override")
+i_tp2_mult    = input.float(5.0,"TP2 R:R",     group="Manual Override")
+i_cooldown    = input.int(3,   "Cooldown bars", group="Manual Override")
+
+f = use_manual ? i_ema_fast  : ema_fast
+m = use_manual ? i_ema_mid   : ema_mid
+s = use_manual ? i_ema_slow  : ema_slow
+v = use_manual ? i_vol_mult  : vol_mult
+a = use_manual ? i_atr_stop  : atr_stop
+r1= use_manual ? i_tp1_mult  : tp1_mult
+r2= use_manual ? i_tp2_mult  : tp2_mult
+cd= use_manual ? i_cooldown  : cooldown
+
+// ─── DISPLAY OPTIONS ─────────────────────────────────────────────────────────
+show_emas     = input.bool(true,  "Show EMAs",          group="Display")
+show_signals  = input.bool(true,  "Show Signals",       group="Display")
+show_levels   = input.bool(true,  "Show TP/SL Lines",   group="Display")
+show_table    = input.bool(true,  "Show Info Table",    group="Display")
+
+// ─── EMA CALCULATION ─────────────────────────────────────────────────────────
+ema1 = ta.ema(close, f)
+ema2 = ta.ema(close, m)
+ema3 = ta.ema(close, s)
+
+if show_emas
+    plot(ema1, "EMA Fast",  color=color.new(color.lime,  0), linewidth=1)
+    plot(ema2, "EMA Mid",   color=color.new(color.orange,0), linewidth=1)
+    plot(ema3, "EMA Slow",  color=color.new(color.red,   0), linewidth=2)
+
+// ─── VOLUME FILTER ───────────────────────────────────────────────────────────
+vol_sma  = ta.sma(volume, 20)
+vol_ok   = volume >= vol_sma * v
+
+// ─── ATR ─────────────────────────────────────────────────────────────────────
+atr14 = ta.atr(14)
+
+// ─── TREND & MOMENTUM CONDITIONS ─────────────────────────────────────────────
+bull_align  = ema1 > ema2 and ema2 > ema3
+bear_align  = ema1 < ema2 and ema2 < ema3
+
+// Candle momentum: bullish engulfing or strong close
+bull_candle = close > open and close > ema1
+bear_candle = close < open and close < ema1
+
+// Price above all EMAs
+above_all   = close > ema1 and close > ema2 and close > ema3
+below_all   = close < ema1 and close < ema2 and close < ema3
+
+// EMA cross confirmation
+ema_cross_up   = ta.crossover(ema1,  ema2)
+ema_cross_down = ta.crossunder(ema1, ema2)
+
+// ─── COOLDOWN LOGIC ──────────────────────────────────────────────────────────
+var int bars_since_signal = 99
+
+bull_signal_raw = bull_align and vol_ok and bull_candle and above_all and ema_cross_up
+bear_signal_raw = bear_align and vol_ok and bear_candle and below_all and ema_cross_down
+
+// Apply cooldown
+bull_signal = bull_signal_raw and bars_since_signal >= cd
+bear_signal = bear_signal_raw and bars_since_signal >= cd
+
+if bull_signal or bear_signal
+    bars_since_signal := 0
+else
+    bars_since_signal := bars_since_signal + 1
+
+// ─── SIGNALS PLOT ────────────────────────────────────────────────────────────
+if show_signals and bull_signal
+    label.new(bar_index, low - atr14 * 0.5,
+              "▲ LONG\n" + str.tostring(close, "#.##"),
+              style=label.style_label_up,
+              color=color.new(color.green, 10),
+              textcolor=color.white, size=size.normal)
+
+if show_signals and bear_signal
+    label.new(bar_index, high + atr14 * 0.5,
+              "▼ SHORT\n" + str.tostring(close, "#.##"),
+              style=label.style_label_down,
+              color=color.new(color.red, 10),
+              textcolor=color.white, size=size.normal)
+
+// ─── TP / SL LEVELS ON SIGNAL ────────────────────────────────────────────────
+var line sl_line   = na
+var line tp1_line  = na
+var line tp2_line  = na
+
+if show_levels and bull_signal
+    sl_price  = close - atr14 * a
+    tp1_price = close + atr14 * a * r1
+    tp2_price = close + atr14 * a * r2
+
+    line.delete(sl_line)
+    line.delete(tp1_line)
+    line.delete(tp2_line)
+
+    sl_line  := line.new(bar_index, sl_price,  bar_index + 20, sl_price,
+                          color=color.red,    width=1, style=line.style_dashed)
+    tp1_line := line.new(bar_index, tp1_price, bar_index + 20, tp1_price,
+                          color=color.lime,   width=1, style=line.style_dashed)
+    tp2_line := line.new(bar_index, tp2_price, bar_index + 20, tp2_price,
+                          color=color.teal,   width=2, style=line.style_dashed)
+
+    label.new(bar_index + 1, sl_price,  "SL " + str.tostring(sl_price,  "#.##"), style=label.style_label_right, color=color.red,   textcolor=color.white, size=size.small)
+    label.new(bar_index + 1, tp1_price, "TP1 "+ str.tostring(tp1_price, "#.##"), style=label.style_label_right, color=color.lime,  textcolor=color.black, size=size.small)
+    label.new(bar_index + 1, tp2_price, "TP2 "+ str.tostring(tp2_price, "#.##"), style=label.style_label_right, color=color.teal,  textcolor=color.white, size=size.small)
+
+// ─── INFO TABLE ──────────────────────────────────────────────────────────────
+if show_table and barstate.islast
+    var table t = table.new(position.top_right, 2, 8,
+                            bgcolor=color.new(color.black, 20),
+                            border_color=color.gray, border_width=1,
+                            frame_color=color.gray, frame_width=1)
+
+    trend_txt   = bull_align ? "📈 BULL" : bear_align ? "📉 BEAR" : "➡ NEUTRAL"
+    trend_col   = bull_align ? color.lime : bear_align ? color.red : color.gray
+    vol_txt     = vol_ok ? "✓ OK" : "✗ LOW"
+    vol_col     = vol_ok ? color.lime : color.red
+
+    table.cell(t, 0, 0, "Momentum V4",  text_color=color.white, bgcolor=color.new(color.blue,20), text_size=size.small)
+    table.cell(t, 1, 0, ticker,          text_color=color.yellow, bgcolor=color.new(color.blue,20), text_size=size.small)
+    table.cell(t, 0, 1, "Trend",         text_color=color.silver, text_size=size.small)
+    table.cell(t, 1, 1, trend_txt,       text_color=trend_col,    text_size=size.small)
+    table.cell(t, 0, 2, "Volume",        text_color=color.silver, text_size=size.small)
+    table.cell(t, 1, 2, vol_txt,         text_color=vol_col,      text_size=size.small)
+    table.cell(t, 0, 3, "EMA F/M/S",    text_color=color.silver, text_size=size.small)
+    table.cell(t, 1, 3, str.tostring(f) + "/" + str.tostring(m) + "/" + str.tostring(s), text_color=color.white, text_size=size.small)
+    table.cell(t, 0, 4, "Vol Mult",     text_color=color.silver, text_size=size.small)
+    table.cell(t, 1, 4, str.tostring(v, "#.#") + "x",            text_color=color.white, text_size=size.small)
+    table.cell(t, 0, 5, "ATR Stop",     text_color=color.silver, text_size=size.small)
+    table.cell(t, 1, 5, str.tostring(a, "#.#") + "x ATR",        text_color=color.white, text_size=size.small)
+    table.cell(t, 0, 6, "TP1 / TP2",   text_color=color.silver, text_size=size.small)
+    table.cell(t, 1, 6, str.tostring(r1,"#.#") + " / " + str.tostring(r2,"#.#") + " R", text_color=color.white, text_size=size.small)
+    table.cell(t, 0, 7, "Cooldown",     text_color=color.silver, text_size=size.small)
+    table.cell(t, 1, 7, str.tostring(cd) + " bars (" + str.tostring(bars_since_signal) + " left)", text_color=color.white, text_size=size.small)
+
+// ─── BACKGROUND TREND COLOR ──────────────────────────────────────────────────
+bgcolor(bull_align ? color.new(color.green, 92) : bear_align ? color.new(color.red, 92) : na, title="Trend Background")

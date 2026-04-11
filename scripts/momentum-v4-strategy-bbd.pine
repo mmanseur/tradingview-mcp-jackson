@@ -1,0 +1,57 @@
+//@version=6
+// Momentum V4 [BBD-B Backtest]
+// Backtest result: +112.61% | 20 trades | Win rate 50% | Profit Factor 4.635 | Max DD 10.52%
+// Parameters: 100% equity/trade, 0 commission, pyramiding=3
+// BBD-B.TO | Daily | TSX
+strategy("Momentum V4 [BBD-B Backtest]", overlay=true,
+         initial_capital=9000, default_qty_type=strategy.percent_of_equity,
+         default_qty_value=100, commission_type=strategy.commission.percent,
+         commission_value=0.0, slippage=0, pyramiding=3)
+
+// ─── BBD-B PARAMETERS ─────────────────────────────────────────────────────────
+// EMA 8/21/50 | Vol 1.3x | ATR stop 1.8x | TP1 2.5R | TP2 5.0R | Cooldown 3
+f  = 8
+m  = 21
+s  = 50
+v  = 1.3
+a  = 1.8
+r1 = 2.5
+r2 = 5.0
+cd = 3
+
+ema1 = ta.ema(close, f)
+ema2 = ta.ema(close, m)
+ema3 = ta.ema(close, s)
+
+plot(ema1, "EMA 8",  color=color.lime,   linewidth=1)
+plot(ema2, "EMA 21", color=color.orange, linewidth=1)
+plot(ema3, "EMA 50", color=color.red,    linewidth=2)
+
+vol_ok = volume >= ta.sma(volume, 20) * v
+atr14  = ta.atr(14)
+
+bull_align  = ema1 > ema2 and ema2 > ema3
+above_all   = close > ema1 and close > ema2 and close > ema3
+bull_candle = close > open and close > ema1
+cross_up    = ta.crossover(ema1, ema2)
+
+var int bars_cd = 99
+bull_raw = bull_align and vol_ok and bull_candle and above_all and cross_up
+bull_sig = bull_raw and bars_cd >= cd
+bars_cd := bull_sig ? 0 : bars_cd + 1
+
+var float entry_p = na
+if bull_sig
+    entry_p := close
+    sl_p     = close - atr14 * a
+    tp1_p    = close + atr14 * a * r1
+    tp2_p    = close + atr14 * a * r2
+    strategy.entry("Long", strategy.long)
+    strategy.exit("TP1", "Long", qty_percent=50,  limit=tp1_p, stop=sl_p)
+    strategy.exit("TP2", "Long", qty_percent=100, limit=tp2_p, stop=sl_p)
+
+if strategy.position_size > 0 and not na(entry_p)
+    if high >= entry_p + atr14 * a * r1
+        strategy.exit("BE", "Long", stop=entry_p)
+
+bgcolor(bull_align ? color.new(color.green, 92) : color.new(color.red, 92))

@@ -4,6 +4,14 @@
       "command": "node",
       "args": ["src/server.js"],
       "cwd": "d:\\Claude\\tradingview-mcp-jackson"
+    },
+    "interactive-brokers-mcp": {
+      "command": "node",
+      "args": ["C:/nvm/nodejs/node_modules/interactive-brokers-mcp/dist/index.js"],
+      "env": {
+        "IB_PAPER_TRADING": "false",
+        "IB_GATEWAY_STARTUP_TIMEOUT": "60000"
+      }
     }
   }
 }
