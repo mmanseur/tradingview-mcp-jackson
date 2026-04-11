@@ -1,6 +1,6 @@
 # Portfolio Analyzer V4 — Documentation
 
-Analyseur automatisé des **positions IBKR ouvertes** (lues depuis le panneau Trading de TradingView) avec recommandations concrètes par position. Multi-timeframe Daily + 4h, stratégie Momentum V4.
+Analyseur automatisé des **positions IBKR ouvertes** (lues depuis le panneau Trading de TradingView) avec recommandations concrètes par position. Multi-timeframe Daily + 4h.
 
 > **Note** : Ce script scanne **uniquement tes positions IBKR réelles**, pas un univers statique. Il génère une recommandation (HOLD / ADD / TIGHTEN STOP / TRIM / EXIT / WATCH) pour chaque position, avec stop-loss, cibles et ratio risque/rendement.
 
@@ -12,35 +12,34 @@ Analyseur automatisé des **positions IBKR ouvertes** (lues depuis le panneau Tr
 - `run_scanner.bat` — wrapper pour Windows Task Scheduler
 - `reports/portfolio_YYYY-MM-DD.md` — rapports d'analyse par position
 - `.claude/commands/scan.md` — slash command `/scan`
-- `scripts/gold-momentum-pro.pine` — source Pine de l'indicateur Gold Momentum Pro (WPM)
+- `scripts/momentum-v4-indicator.pine` — indicateur unifié (V4 + Gold Momentum Pro)
 - `scripts/gold-momentum-pro-strategy.pine` — source Pine de la strategy pour backtest
 - `scanner_universe.json` — *(legacy, plus utilisé par le portfolio analyzer)*
 
-## Indicateurs par ticker (multi-indic routing)
+## Indicateur unifié — auto-détection par ticker
 
-Le scanner route chaque ticker vers l'indicateur le mieux adapté à son comportement :
+Un **seul indicateur** `"Momentum V4 [BBD-B Backtest]"` gère les deux logiques :
 
-| Ticker | Indicateur | Raison |
+| Ticker détecté | Logique activée | Paramètres |
 |---|---|---|
-| TSX:WPM | **Gold Momentum Pro** | Gold stock, mega-trends → Donchian turtle-style |
-| TSX:AEM | **Gold Momentum Pro** | Gold stock, mêmes caractéristiques |
-| Tous les autres | **Momentum V4** (défaut) | Swing général, breakouts courts |
+| WPM, AEM | **Gold Momentum Pro** | EMA 13/26/55, Donchian 55/20, ADX > 20 |
+| Tous les autres | **Momentum V4** | EMA 8/21/50, Volume 1.3×, Cooldown 3 bars |
 
-**Prérequis** : les **deux indicateurs** doivent être présents sur ton chart TradingView actif. Si un indicateur manque, le scanner fait un fallback gracieux et affiche un warning en tête du rapport.
+Le champ `IsGoldPro` dans le data window indique le mode actif (1 = Gold Pro, 0 = V4).
 
-### Ajouter un nouveau mapping
+**Prérequis** : l'indicateur `"Momentum V4 [BBD-B Backtest]"` doit être **présent sur le chart actif**. Un seul suffit — il s'adapte automatiquement au ticker.
 
-Éditer `src/scripts/scanner_v4.js`, section `TICKER_INDICATORS` :
+### Ajouter un nouveau ticker gold
 
-```javascript
-const TICKER_INDICATORS = {
-  'TSX:WPM':   { name: 'Gold Momentum Pro', reader: readGoldMomentumPro },
-  'TSX:AEM':   { name: 'Gold Momentum Pro', reader: readGoldMomentumPro },
-  // Ajouter ici : 'TSX:XYZ': { name: 'Mon Indic', reader: readMonIndic },
-};
+Éditer `scripts/momentum-v4-indicator.pine`, ligne `isGoldTicker` :
+
+```pine
+isGoldTicker = str.contains(syminfo.ticker, "WPM")
+            or str.contains(syminfo.ticker, "AEM")
+            or str.contains(syminfo.ticker, "XYZ")  // nouveau ticker gold
 ```
 
-Puis implémenter `readMonIndic()` sur le modèle de `readGoldMomentumPro()`.
+Puis re-compiler et sauvegarder dans TradingView.
 
 ### Gold Momentum Pro — résultats backtest
 

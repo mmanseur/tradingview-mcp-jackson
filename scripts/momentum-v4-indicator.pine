@@ -1,171 +1,130 @@
-// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0
-// © Claude Code — Momentum V4 Indicator
-//@version=5
-indicator("Momentum V4", overlay=true, max_labels_count=200, max_lines_count=200)
+//@version=6
+indicator("Momentum V4 [BBD-B Backtest]", overlay=true, max_labels_count=300)
 
-// ─── TICKER DETECTION ────────────────────────────────────────────────────────
-ticker = syminfo.ticker
+// ============================================================
+// Unified Momentum Indicator — auto-switches logic per ticker
+//   • WPM / AEM  → Gold Momentum Pro (Donchian turtle, 13/26/55)
+//   • All others → Momentum V4       (EMA cross,       8/21/50)
+// Scanner reads: EMA Fast/Mid/Slow, BRK, PB, ADD, EXIT, SELL,
+//                WEAK, Donchian Hi/Lo, Chandelier, ADX, Pyramid Count, IsGoldPro
+// ============================================================
 
-is_bbd  = str.contains(ticker, "BBD")
-is_wpm  = str.contains(ticker, "WPM")
-is_aem  = str.contains(ticker, "AEM")
+// ─── AUTO-DETECT GOLD TICKER ────────────────────────────────
+isGoldTicker = str.contains(syminfo.ticker, "WPM") or str.contains(syminfo.ticker, "AEM")
 
-// ─── PARAMETERS PER TICKER ───────────────────────────────────────────────────
-// BBD-B : EMA 8/21/50, vol 1.3x, ATR stop 1.8x, TP 2.5/5.0, cooldown 3
-// WPM   : EMA 13/26/55, vol 2.0x, ATR stop 3.0x, TP 3.5/7.0, cooldown 6
-// AEM   : EMA 13/26/55, vol 2.2x, ATR stop 3.5x, TP 2.5/5.0, cooldown 10
+// ─── EMA LENGTHS ────────────────────────────────────────────
+f = isGoldTicker ? 13 : 8
+m = isGoldTicker ? 26 : 21
+s = isGoldTicker ? 55 : 50
 
-ema_fast   = is_bbd ? 8  : 13
-ema_mid    = is_bbd ? 21 : 26
-ema_slow   = is_bbd ? 50 : 55
-vol_mult   = is_bbd ? 1.3 : (is_wpm ? 2.0 : 2.2)
-atr_stop   = is_bbd ? 1.8 : (is_wpm ? 3.0 : 3.5)
-tp1_mult   = is_bbd ? 2.5 : (is_wpm ? 3.5 : 2.5)
-tp2_mult   = is_bbd ? 5.0 : (is_wpm ? 7.0 : 5.0)
-cooldown   = is_bbd ? 3   : (is_wpm ? 6   : 10)
+emaFast = ta.ema(close, f)
+emaMid  = ta.ema(close, m)
+emaSlow = ta.ema(close, s)
+atr14   = ta.atr(14)
 
-// Override inputs (manual mode)
-use_manual    = input.bool(false, "Override auto parameters")
-i_ema_fast    = input.int(8,   "EMA Fast",     group="Manual Override")
-i_ema_mid     = input.int(21,  "EMA Mid",      group="Manual Override")
-i_ema_slow    = input.int(50,  "EMA Slow",     group="Manual Override")
-i_vol_mult    = input.float(1.3,"Vol Multiplier", group="Manual Override")
-i_atr_stop    = input.float(1.8,"ATR Stop Mult",  group="Manual Override")
-i_tp1_mult    = input.float(2.5,"TP1 R:R",     group="Manual Override")
-i_tp2_mult    = input.float(5.0,"TP2 R:R",     group="Manual Override")
-i_cooldown    = input.int(3,   "Cooldown bars", group="Manual Override")
+bull_align = emaFast > emaMid and emaMid > emaSlow
+bear_align = emaFast < emaMid and emaMid < emaSlow
 
-f = use_manual ? i_ema_fast  : ema_fast
-m = use_manual ? i_ema_mid   : ema_mid
-s = use_manual ? i_ema_slow  : ema_slow
-v = use_manual ? i_vol_mult  : vol_mult
-a = use_manual ? i_atr_stop  : atr_stop
-r1= use_manual ? i_tp1_mult  : tp1_mult
-r2= use_manual ? i_tp2_mult  : tp2_mult
-cd= use_manual ? i_cooldown  : cooldown
+// ─── MOMENTUM V4 SIGNALS ─────────────────────────────────────
+vol_ok       = volume >= ta.sma(volume, 20) * (isGoldTicker ? 2.0 : 1.3)
+above_all    = close > emaFast and close > emaMid and close > emaSlow
+below_all    = close < emaFast and close < emaMid and close < emaSlow
+bull_candle  = close > open and close > emaFast
+bear_candle  = close < open and close < emaFast
+ema_cross_up = ta.crossover(emaFast, emaMid)
+ema_cross_dn = ta.crossunder(emaFast, emaMid)
 
-// ─── DISPLAY OPTIONS ─────────────────────────────────────────────────────────
-show_emas     = input.bool(true,  "Show EMAs",          group="Display")
-show_signals  = input.bool(true,  "Show Signals",       group="Display")
-show_levels   = input.bool(true,  "Show TP/SL Lines",   group="Display")
-show_table    = input.bool(true,  "Show Info Table",    group="Display")
-
-// ─── EMA CALCULATION ─────────────────────────────────────────────────────────
-ema1 = ta.ema(close, f)
-ema2 = ta.ema(close, m)
-ema3 = ta.ema(close, s)
-
-if show_emas
-    plot(ema1, "EMA Fast",  color=color.new(color.lime,  0), linewidth=1)
-    plot(ema2, "EMA Mid",   color=color.new(color.orange,0), linewidth=1)
-    plot(ema3, "EMA Slow",  color=color.new(color.red,   0), linewidth=2)
-
-// ─── VOLUME FILTER ───────────────────────────────────────────────────────────
-vol_sma  = ta.sma(volume, 20)
-vol_ok   = volume >= vol_sma * v
-
-// ─── ATR ─────────────────────────────────────────────────────────────────────
-atr14 = ta.atr(14)
-
-// ─── TREND & MOMENTUM CONDITIONS ─────────────────────────────────────────────
-bull_align  = ema1 > ema2 and ema2 > ema3
-bear_align  = ema1 < ema2 and ema2 < ema3
-
-// Candle momentum: bullish engulfing or strong close
-bull_candle = close > open and close > ema1
-bear_candle = close < open and close < ema1
-
-// Price above all EMAs
-above_all   = close > ema1 and close > ema2 and close > ema3
-below_all   = close < ema1 and close < ema2 and close < ema3
-
-// EMA cross confirmation
-ema_cross_up   = ta.crossover(ema1,  ema2)
-ema_cross_down = ta.crossunder(ema1, ema2)
-
-// ─── COOLDOWN LOGIC ──────────────────────────────────────────────────────────
-var int bars_since_signal = 99
-
-bull_signal_raw = bull_align and vol_ok and bull_candle and above_all and ema_cross_up
-bear_signal_raw = bear_align and vol_ok and bear_candle and below_all and ema_cross_down
-
-// Apply cooldown
-bull_signal = bull_signal_raw and bars_since_signal >= cd
-bear_signal = bear_signal_raw and bars_since_signal >= cd
-
-if bull_signal or bear_signal
-    bars_since_signal := 0
+var int bars_since = 99
+v4_brk_raw  = bull_align and vol_ok and bull_candle and above_all and ema_cross_up
+v4_sell_raw = bear_align and vol_ok and bear_candle and below_all and ema_cross_dn
+v4_brk      = v4_brk_raw  and bars_since >= 3
+v4_sell     = v4_sell_raw and bars_since >= 3
+if v4_brk or v4_sell
+    bars_since := 0
 else
-    bars_since_signal := bars_since_signal + 1
+    bars_since += 1
 
-// ─── SIGNALS PLOT ────────────────────────────────────────────────────────────
-if show_signals and bull_signal
-    label.new(bar_index, low - atr14 * 0.5,
-              "▲ LONG\n" + str.tostring(close, "#.##"),
-              style=label.style_label_up,
-              color=color.new(color.green, 10),
-              textcolor=color.white, size=size.normal)
+v4_pb   = bull_align and low <= emaFast * 1.005 and close > emaFast and close > open and not v4_brk
+v4_weak = bull_align and close < emaFast and not v4_sell
 
-if show_signals and bear_signal
-    label.new(bar_index, high + atr14 * 0.5,
-              "▼ SHORT\n" + str.tostring(close, "#.##"),
-              style=label.style_label_down,
-              color=color.new(color.red, 10),
-              textcolor=color.white, size=size.normal)
+// ─── GOLD MOMENTUM PRO SIGNALS (Donchian turtle) ─────────────
+adxLen      = 14
+[_dp, _dm, adx] = ta.dmi(adxLen, adxLen)
+adxOk       = adx > 20.0
 
-// ─── TP / SL LEVELS ON SIGNAL ────────────────────────────────────────────────
-var line sl_line   = na
-var line tp1_line  = na
-var line tp2_line  = na
+entryHigh = ta.highest(high[1], 55)
+addHigh   = ta.highest(high[1], 20)
+exitLow   = ta.lowest(low[1],   20)
+chandelier = ta.highest(high, 22) - atr14 * 4.5
 
-if show_levels and bull_signal
-    sl_price  = close - atr14 * a
-    tp1_price = close + atr14 * a * r1
-    tp2_price = close + atr14 * a * r2
+var bool  gp_inPos = false
+var int   gp_entryBar = 0
+var int   gp_adds  = 0
 
-    line.delete(sl_line)
-    line.delete(tp1_line)
-    line.delete(tp2_line)
+gp_brk = close > entryHigh and bull_align and adxOk and not gp_inPos
+gp_pb  = close > emaFast and low < emaFast and close > entryHigh[5] and bull_align and adxOk and not gp_brk and not gp_inPos
 
-    sl_line  := line.new(bar_index, sl_price,  bar_index + 20, sl_price,
-                          color=color.red,    width=1, style=line.style_dashed)
-    tp1_line := line.new(bar_index, tp1_price, bar_index + 20, tp1_price,
-                          color=color.lime,   width=1, style=line.style_dashed)
-    tp2_line := line.new(bar_index, tp2_price, bar_index + 20, tp2_price,
-                          color=color.teal,   width=2, style=line.style_dashed)
+if (gp_brk or gp_pb) and not gp_inPos
+    gp_inPos    := true
+    gp_entryBar := bar_index
+    gp_adds     := 0
 
-    label.new(bar_index + 1, sl_price,  "SL " + str.tostring(sl_price,  "#.##"), style=label.style_label_right, color=color.red,   textcolor=color.white, size=size.small)
-    label.new(bar_index + 1, tp1_price, "TP1 "+ str.tostring(tp1_price, "#.##"), style=label.style_label_right, color=color.lime,  textcolor=color.black, size=size.small)
-    label.new(bar_index + 1, tp2_price, "TP2 "+ str.tostring(tp2_price, "#.##"), style=label.style_label_right, color=color.teal,  textcolor=color.white, size=size.small)
+gp_add  = gp_inPos and close > addHigh and adxOk and gp_adds < 2 and bar_index - gp_entryBar >= 10
+if gp_add
+    gp_adds += 1
 
-// ─── INFO TABLE ──────────────────────────────────────────────────────────────
-if show_table and barstate.islast
-    var table t = table.new(position.top_right, 2, 8,
-                            bgcolor=color.new(color.black, 20),
-                            border_color=color.gray, border_width=1,
-                            frame_color=color.gray, frame_width=1)
+gp_exit = gp_inPos and (close < exitLow or close < chandelier)
+if gp_exit
+    gp_inPos := false
+    gp_adds  := 0
 
-    trend_txt   = bull_align ? "📈 BULL" : bear_align ? "📉 BEAR" : "➡ NEUTRAL"
-    trend_col   = bull_align ? color.lime : bear_align ? color.red : color.gray
-    vol_txt     = vol_ok ? "✓ OK" : "✗ LOW"
-    vol_col     = vol_ok ? color.lime : color.red
+gp_weak = gp_inPos and close < emaFast and not gp_exit
 
-    table.cell(t, 0, 0, "Momentum V4",  text_color=color.white, bgcolor=color.new(color.blue,20), text_size=size.small)
-    table.cell(t, 1, 0, ticker,          text_color=color.yellow, bgcolor=color.new(color.blue,20), text_size=size.small)
-    table.cell(t, 0, 1, "Trend",         text_color=color.silver, text_size=size.small)
-    table.cell(t, 1, 1, trend_txt,       text_color=trend_col,    text_size=size.small)
-    table.cell(t, 0, 2, "Volume",        text_color=color.silver, text_size=size.small)
-    table.cell(t, 1, 2, vol_txt,         text_color=vol_col,      text_size=size.small)
-    table.cell(t, 0, 3, "EMA F/M/S",    text_color=color.silver, text_size=size.small)
-    table.cell(t, 1, 3, str.tostring(f) + "/" + str.tostring(m) + "/" + str.tostring(s), text_color=color.white, text_size=size.small)
-    table.cell(t, 0, 4, "Vol Mult",     text_color=color.silver, text_size=size.small)
-    table.cell(t, 1, 4, str.tostring(v, "#.#") + "x",            text_color=color.white, text_size=size.small)
-    table.cell(t, 0, 5, "ATR Stop",     text_color=color.silver, text_size=size.small)
-    table.cell(t, 1, 5, str.tostring(a, "#.#") + "x ATR",        text_color=color.white, text_size=size.small)
-    table.cell(t, 0, 6, "TP1 / TP2",   text_color=color.silver, text_size=size.small)
-    table.cell(t, 1, 6, str.tostring(r1,"#.#") + " / " + str.tostring(r2,"#.#") + " R", text_color=color.white, text_size=size.small)
-    table.cell(t, 0, 7, "Cooldown",     text_color=color.silver, text_size=size.small)
-    table.cell(t, 1, 7, str.tostring(cd) + " bars (" + str.tostring(bars_since_signal) + " left)", text_color=color.white, text_size=size.small)
+// ─── SELECT ACTIVE SIGNALS ───────────────────────────────────
+sig_brk  = isGoldTicker ? gp_brk  : v4_brk
+sig_pb   = isGoldTicker ? gp_pb   : v4_pb
+sig_add  = isGoldTicker ? gp_add  : false
+sig_exit = isGoldTicker ? gp_exit : false
+sig_sell = isGoldTicker ? false   : v4_sell
+sig_weak = isGoldTicker ? gp_weak : v4_weak
 
-// ─── BACKGROUND TREND COLOR ──────────────────────────────────────────────────
-bgcolor(bull_align ? color.new(color.green, 92) : bear_align ? color.new(color.red, 92) : na, title="Trend Background")
+// ─── PLOTS (overlay) ─────────────────────────────────────────
+plot(emaFast,                      title="EMA Fast",    color=color.new(color.lime,   0), linewidth=1)
+plot(emaMid,                       title="EMA Mid",     color=color.new(color.orange, 0), linewidth=1)
+plot(emaSlow,                      title="EMA Slow",    color=color.new(color.red,    0), linewidth=2)
+plot(isGoldTicker ? entryHigh : na, title="Donchian Hi", color=color.new(color.green, 0))
+plot(isGoldTicker ? exitLow   : na, title="Donchian Lo", color=color.new(color.red,   0))
+plot(isGoldTicker ? chandelier: na, title="Chandelier",  color=color.new(color.aqua,  0), style=plot.style_linebr)
+
+// ─── DATA WINDOW OUTPUTS ─────────────────────────────────────
+plot(adx,                          title="ADX",           display=display.data_window)
+plot(sig_brk  ? 1 : 0,            title="BRK",           display=display.data_window)
+plot(sig_pb   ? 1 : 0,            title="PB",            display=display.data_window)
+plot(sig_add  ? 1 : 0,            title="ADD",           display=display.data_window)
+plot(sig_exit ? 1 : 0,            title="EXIT",          display=display.data_window)
+plot(sig_sell ? 1 : 0,            title="SELL",          display=display.data_window)
+plot(sig_weak ? 1 : 0,            title="WEAK",          display=display.data_window)
+plot(isGoldTicker ? gp_adds : 0,  title="Pyramid Count", display=display.data_window)
+plot(isGoldTicker ? 1 : 0,        title="IsGoldPro",     display=display.data_window)
+
+// ─── SIGNAL LABELS ───────────────────────────────────────────
+if sig_brk
+    label.new(bar_index, low, "BRK", style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small)
+if sig_pb
+    label.new(bar_index, low, "PB", style=label.style_label_up, color=color.lime, textcolor=color.black, size=size.small)
+if sig_add
+    label.new(bar_index, high, "ADD", style=label.style_label_down, color=color.blue, textcolor=color.white, size=size.small)
+if sig_exit
+    label.new(bar_index, high, "EXIT", style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
+if sig_sell and not isGoldTicker
+    label.new(bar_index, high + atr14 * 0.5, "SELL", style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
+
+// ─── BACKGROUND ──────────────────────────────────────────────
+bgcolor(bull_align ? color.new(color.green, 92) : bear_align ? color.new(color.red, 92) : na)
+
+// ─── ALERTS ──────────────────────────────────────────────────
+alertcondition(sig_brk,  title="BRK",  message="Momentum: BREAKOUT on {{ticker}}")
+alertcondition(sig_pb,   title="PB",   message="Momentum: PULLBACK on {{ticker}}")
+alertcondition(sig_add,  title="ADD",  message="Gold Pro: ADD on {{ticker}}")
+alertcondition(sig_exit, title="EXIT", message="Gold Pro: EXIT on {{ticker}}")
+alertcondition(sig_sell, title="SELL", message="Momentum V4: SELL on {{ticker}}")

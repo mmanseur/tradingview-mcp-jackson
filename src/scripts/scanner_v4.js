@@ -48,61 +48,44 @@ function round(v, dp = 2) {
   return Math.round(v * f) / f;
 }
 
-// ---------- Indicator readers ----------
-async function readIndicatorValues(namePattern) {
+// ---------- Indicator reader ----------
+// Single unified indicator "Momentum V4 [BBD-B Backtest]" auto-switches logic:
+//   WPM / AEM → Gold Momentum Pro (Donchian turtle, EMA 13/26/55)
+//   Others    → Momentum V4       (EMA cross, EMA 8/21/50)
+// The IsGoldPro data-window field = 1 signals which variant is active.
+async function readIndicator() {
   const res = await data.getStudyValues();
   const studies = res?.studies || [];
-  // Filter out strategies (contain "Strategy" in name) if we want the pure indicator,
-  // but accept both for flexibility. We use the first match.
-  const study = studies.find((s) => namePattern.test(s.name));
-  return study?.values || null;
-}
-
-async function readMomentumV4() {
-  const v = await readIndicatorValues(/momentum\s*v4(?!\s*gold)/i);
+  const study = studies.find((s) => /momentum\s*v4/i.test(s.name));
+  const v = study?.values;
   if (!v) return null;
-  return {
-    emaFast: toNum(v['EMA Fast']),
-    emaMid: toNum(v['EMA Mid']),
-    emaSlow: toNum(v['EMA Slow']),
-    BRK: toNum(v['BRK']) || 0,
-    PB: toNum(v['PB']) || 0,
-    SELL: toNum(v['SELL']) || 0,
-    WEAK: toNum(v['WEAK']) || 0,
-    _variant: 'v4',
-  };
-}
 
-async function readGoldMomentumPro() {
-  const v = await readIndicatorValues(/gold\s*momentum\s*pro/i);
-  if (!v) return null;
+  const isGoldPro = (toNum(v['IsGoldPro']) || 0) > 0;
   return {
-    emaFast: toNum(v['EMA Fast']),
-    emaMid: toNum(v['EMA Mid']),
-    emaSlow: toNum(v['EMA Slow']),
-    donchianHi: toNum(v['Donchian Hi']),
-    donchianLo: toNum(v['Donchian Lo']),
-    chandelier: toNum(v['Chandelier']),
-    adx: toNum(v['ADX']),
-    BRK: toNum(v['BRK']) || 0,
-    PB: toNum(v['PB']) || 0,
-    ADD: toNum(v['ADD']) || 0,
-    EXIT: toNum(v['EXIT']) || 0,
-    WEAK: toNum(v['WEAK']) || 0,
+    emaFast:      toNum(v['EMA Fast']),
+    emaMid:       toNum(v['EMA Mid']),
+    emaSlow:      toNum(v['EMA Slow']),
+    donchianHi:   toNum(v['Donchian Hi']),
+    donchianLo:   toNum(v['Donchian Lo']),
+    chandelier:   toNum(v['Chandelier']),
+    adx:          toNum(v['ADX']),
+    BRK:          toNum(v['BRK'])  || 0,
+    PB:           toNum(v['PB'])   || 0,
+    ADD:          toNum(v['ADD'])  || 0,
+    EXIT:         toNum(v['EXIT']) || 0,
+    SELL:         toNum(v['SELL']) || 0,
+    WEAK:         toNum(v['WEAK']) || 0,
     pyramidCount: toNum(v['Pyramid Count']) || 0,
-    _variant: 'gold-pro',
+    _variant:     isGoldPro ? 'gold-pro' : 'v4',
   };
 }
 
-// Ticker → indicator routing. Tickers not listed fall back to Momentum V4.
-const TICKER_INDICATORS = {
-  'TSX:WPM': { name: 'Gold Momentum Pro', reader: readGoldMomentumPro },
-  'TSX:AEM': { name: 'Gold Momentum Pro', reader: readGoldMomentumPro },
-};
-const DEFAULT_INDICATOR = { name: 'Momentum V4', reader: readMomentumV4 };
+// Single indicator config — all tickers use the same reader.
+// The indicator auto-detects the ticker and switches logic internally.
+const INDICATOR_NAME = 'Momentum V4 [BBD-B Backtest]';
 
-function getIndicatorFor(tvSymbol) {
-  return TICKER_INDICATORS[tvSymbol] || DEFAULT_INDICATOR;
+function getIndicatorFor(_tvSymbol) {
+  return { name: INDICATOR_NAME, reader: readIndicator };
 }
 
 async function analyzeOne(symbol, timeframe, indicatorCfg) {
@@ -115,18 +98,10 @@ async function analyzeOne(symbol, timeframe, indicatorCfg) {
     indicatorCfg.reader(),
   ]);
 
-  // Fallback sécurisé : si l'indicateur attendu n'est pas trouvé, tenter le fallback Momentum V4
-  let v = values;
-  let indicatorUsed = indicatorCfg.name;
-  if (!v && indicatorCfg !== DEFAULT_INDICATOR) {
-    v = await DEFAULT_INDICATOR.reader();
-    if (v) indicatorUsed = `${DEFAULT_INDICATOR.name} (fallback)`;
-  }
+  const v = values;
+  const indicatorUsed = indicatorCfg.name;
   if (!v) {
-    const missing = indicatorCfg === DEFAULT_INDICATOR
-      ? `Indicateur "${indicatorCfg.name}" absent du chart`
-      : `Ni "${indicatorCfg.name}" ni "${DEFAULT_INDICATOR.name}" trouvé sur le chart`;
-    return { timeframe, error: missing };
+    return { timeframe, error: `Indicateur "${INDICATOR_NAME}" absent du chart — vérifier que l'indicateur est chargé` };
   }
 
   const price = quote?.last || quote?.close;
