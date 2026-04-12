@@ -1,0 +1,126 @@
+//@version=6
+// ============================================================
+// Unified Momentum Strategy — Backtest toutes les positions
+//   • WPM / AEM  → Gold Momentum Pro (Donchian 13/26/55)
+//   • Autres     → Momentum V4       (EMA cross 8/21/50)
+// Capital : 9000 CAD | Commission : 0.1% | Slippage : 1
+// ============================================================
+strategy("Unified Momentum Strategy [Backtest]",
+     overlay              = true,
+     pyramiding           = 3,
+     initial_capital      = 9000,
+     default_qty_type     = strategy.percent_of_equity,
+     default_qty_value    = 100,
+     commission_type      = strategy.commission.percent,
+     commission_value     = 0.1,
+     slippage             = 1,
+     process_orders_on_close = false,
+     calc_on_every_tick   = false)
+
+// ─── AUTO-DETECT ────────────────────────────────────────────
+isGold = str.contains(syminfo.ticker, "WPM") or str.contains(syminfo.ticker, "AEM")
+
+// ─── EMA LENGTHS ────────────────────────────────────────────
+f = isGold ? 13 : 8
+m = isGold ? 26 : 21
+s = isGold ? 55 : 50
+
+emaFast = ta.ema(close, f)
+emaMid  = ta.ema(close, m)
+emaSlow = ta.ema(close, s)
+atr14   = ta.atr(14)
+
+bullAlign = emaFast > emaMid and emaMid > emaSlow
+
+// ─── MOMENTUM V4 (BBD-B, CLS, CGG, VNP) ─────────────────────
+vol_ok       = volume >= ta.sma(volume, 20) * 1.3
+above_all    = close > emaFast and close > emaMid and close > emaSlow
+bull_candle  = close > open and close > emaFast
+ema_cross_up = ta.crossover(emaFast, emaMid)
+bear_align   = emaFast < emaMid and emaMid < emaSlow
+below_all    = close < emaFast and close < emaMid and close < emaSlow
+bear_candle  = close < open and close < emaFast
+ema_cross_dn = ta.crossunder(emaFast, emaMid)
+
+var int bars_cd = 99
+v4_brk_raw  = bullAlign and vol_ok and bull_candle and above_all and ema_cross_up
+v4_sell_raw = bear_align and vol_ok and bear_candle and below_all and ema_cross_dn
+v4_brk  = v4_brk_raw  and bars_cd >= 3
+v4_sell = v4_sell_raw and bars_cd >= 3
+if v4_brk or v4_sell
+    bars_cd := 0
+else
+    bars_cd += 1
+
+v4_pb = bullAlign and low <= emaFast * 1.005 and close > emaFast and close > open and not v4_brk
+
+// ─── GOLD MOMENTUM PRO (WPM, AEM) ────────────────────────────
+[_dp, _dm, adx] = ta.dmi(14, 14)
+adxOk      = adx > 20.0
+entryHigh  = ta.highest(high[1], 55)
+addHigh    = ta.highest(high[1], 20)
+exitLow    = ta.lowest(low[1],   20)
+chandelier = ta.highest(high, 22) - atr14 * 4.5
+
+gp_brk  = close > entryHigh and bullAlign and adxOk and strategy.position_size == 0
+gp_pb   = close > emaFast and low < emaFast and close > entryHigh[5] and bullAlign and adxOk and not gp_brk and strategy.position_size == 0
+gp_add  = strategy.position_size > 0 and close > addHigh and adxOk
+gp_exit = strategy.position_size > 0 and (close < exitLow or close < chandelier)
+
+// ─── ORDRES V4 ───────────────────────────────────────────────
+if not isGold
+    sl = close - atr14 * 1.8
+    tp1 = close + atr14 * 1.8 * 2.5
+    tp2 = close + atr14 * 1.8 * 5.0
+    if v4_brk and strategy.position_size == 0
+        strategy.entry("Long", strategy.long, comment="BRK")
+        strategy.exit("TP1", "Long", qty_percent=50,  limit=tp1, stop=sl)
+        strategy.exit("TP2", "Long", qty_percent=100, limit=tp2, stop=sl)
+    if v4_pb and strategy.position_size == 0
+        strategy.entry("PB", strategy.long, comment="PB")
+        strategy.exit("TP1pb", "PB", qty_percent=50,  limit=close + atr14 * 4.5, stop=close - atr14 * 1.8)
+        strategy.exit("TP2pb", "PB", qty_percent=100, limit=close + atr14 * 9.0, stop=close - atr14 * 1.8)
+    if v4_sell and strategy.position_size > 0
+        strategy.close_all(comment="SELL")
+
+// ─── ORDRES GOLD PRO ─────────────────────────────────────────
+var int gp_adds = 0
+if isGold
+    if strategy.position_size == 0 and strategy.position_size[1] > 0
+        gp_adds := 0
+    if gp_brk
+        gp_adds := 0
+        strategy.entry("Long", strategy.long, comment="BRK")
+    if gp_pb
+        gp_adds := 0
+        strategy.entry("Long", strategy.long, comment="PB")
+    if gp_add and gp_adds < 2
+        gp_adds += 1
+        strategy.entry("Add" + str.tostring(gp_adds), strategy.long, comment="ADD")
+    if gp_exit
+        strategy.close_all(comment="EXIT")
+
+// ─── PLOTS ───────────────────────────────────────────────────
+plot(emaFast,                        "EMA Fast",    color=color.new(color.lime,   0), linewidth=1)
+plot(emaMid,                         "EMA Mid",     color=color.new(color.orange, 0), linewidth=1)
+plot(emaSlow,                        "EMA Slow",    color=color.new(color.red,    0), linewidth=2)
+plot(isGold ? entryHigh : na,        "Donchian Hi", color=color.new(color.green,  0))
+plot(isGold ? exitLow   : na,        "Donchian Lo", color=color.new(color.red,    0))
+plot(isGold ? chandelier : na,       "Chandelier",  color=color.new(color.aqua,   0), style=plot.style_linebr)
+
+bgcolor(bullAlign ? color.new(color.green, 92) : bear_align ? color.new(color.red, 92) : na)
+
+if isGold and gp_brk
+    label.new(bar_index, low,  "BRK", style=label.style_label_up,   color=color.green, textcolor=color.white, size=size.small)
+if isGold and gp_pb
+    label.new(bar_index, low,  "PB",  style=label.style_label_up,   color=color.lime,  textcolor=color.black, size=size.small)
+if isGold and gp_add and gp_adds <= 2
+    label.new(bar_index, high, "ADD", style=label.style_label_down, color=color.blue,  textcolor=color.white, size=size.small)
+if isGold and gp_exit
+    label.new(bar_index, high, "EXIT",style=label.style_label_down, color=color.red,   textcolor=color.white, size=size.small)
+if not isGold and v4_brk
+    label.new(bar_index, low,  "BRK", style=label.style_label_up,   color=color.green, textcolor=color.white, size=size.small)
+if not isGold and v4_pb
+    label.new(bar_index, low,  "PB",  style=label.style_label_up,   color=color.lime,  textcolor=color.black, size=size.small)
+if not isGold and v4_sell
+    label.new(bar_index, high, "SELL",style=label.style_label_down, color=color.red,   textcolor=color.white, size=size.small)

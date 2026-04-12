@@ -16,7 +16,8 @@
       "mcp__ibkr__get_accounts",
       "mcp__ibkr__get_portfolio",
       "mcp__ibkr__get_account_summary",
-      "mcp__tradingview-mcp__tv_health_check"
+      "mcp__tradingview-mcp__tv_health_check",
+      "Bash(npm run:*)"
     ],
     "additionalDirectories": [
       "d:\\Claude\\swing_trading_bot"
