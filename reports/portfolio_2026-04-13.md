@@ -1,5 +1,5 @@
 # Analyse Portefeuille IBKR — 2026-04-13
-> Généré à 08:57:58 ET · 3 position(s) · Multi-TF Daily + 4h · Indicateurs par ticker
+> Généré à 09:31:27 ET · 3 position(s) · Multi-TF Daily + 4h · Indicateurs par ticker
 
 ## Résumé du compte
 
@@ -7,47 +7,47 @@
 |---|---|
 | Positions ouvertes | **3** |
 | Coût total | 7785.25 CAD |
-| Valeur marché | 7773.97 CAD |
-| P/L latent | **-23.65 CAD** |
-| P/L du jour | -12.4 CAD |
+| Valeur marché | 7696.81 CAD |
+| P/L latent | **-132.39 CAD** |
+| P/L du jour | -121.1 CAD |
 
 ## Vue d'ensemble
 
 | Ticker | Indic | Qty | Avg | Last | P/L CAD | P/L % | Signal D | Aligné 4h | Action |
 |---|---|---|---|---|---|---|---|---|---|
-| **TSX:BBD.B** | V4 | 18 | 263.6 | 258.02 | -100.4 | -2.1% | - | ✅ | ✅ **HOLD** |
-| **TSX:WPM** | V4 | 13 | 199.92 | 200.24 | -8.25 | 0.2% | - | ✅ | ✅ **HOLD** |
-| **TSX:CGG** | V4 | 17 | 25.97 | 30.97 | +85 | 19.3% | - | ⚪ | ⚪ **WATCH** |
+| **TSX:BBD.B** | V4 | 18 | 263.6 | 253.75 | -190.76 | -3.7% | WEAK | ⚪ | 🟡 **TIGHTEN STOP** |
+| **TSX:WPM** | V4 | 13 | 199.92 | 199.04 | -11.5 | -0.4% | - | ✅ | ✅ **HOLD** |
+| **TSX:CGG** | V4 | 17 | 25.97 | 31.87 | +69.87 | 22.7% | - | ⚪ | ⚪ **WATCH** |
 
 ---
 ## Analyse détaillée
 
-### ✅ TSX:BBD.B  — HOLD
+### 🟡 TSX:BBD.B  — TIGHTEN STOP
 
 **Position IBKR :**
 - Side: **Long** · Qty: **18**
-- Prix d'entrée moyen: **263.6** · Dernier: **258.02** (null)
-- P/L latent: **-100.4 CAD** (-2.12%)
-- P/L du jour: +0 CAD
+- Prix d'entrée moyen: **263.6** · Dernier: **253.75** (null)
+- P/L latent: **-190.76 CAD** (-3.74%)
+- P/L du jour: -90.4 CAD
 
 **Analyse technique (Momentum V4 [BBD-B Backtest]) :**
 
 | TF | Prix | EMA F/M/S | Aligné | BRK | PB | SELL | Ext% |
 |---|---|---|---|---|---|---|---|
-| Daily | 258.02 | 253.11 / 250.05 / 248.96 | ✅ Haussier | 0 | 0 | 0 | 1.9% |
-| 4h | 257.91 | 256.07 / 251.38 / 249.85 | ✅ Haussier | 0 | 1 | 0 | 0.7% |
+| Daily | 253 | 253.09 / 250.32 / 249.12 | ⚪ Neutre | 0 | 0 | 0 | -0.0% |
+| 4h | 253 | 255.39 / 251.53 / 249.97 | ⚪ Neutre | 0 | 0 | 0 | -0.9% |
 
 **Recommandation :**
 
-> ✅ **HOLD** — Structure haussière intacte malgré P/L -2.1% (mauvaise entrée). Pas de raison de sortir.
+> 🟡 **TIGHTEN STOP** — Structure affaiblie: prix 253 sous EMA Fast 253.09. Protéger les gains.
 
 | | |
 |---|---|
-| Stop-loss suggéré | **248.96** (si touché, P/L = -263.52 CAD) |
+| Stop-loss suggéré | **250.32** (si touché, P/L = -239.04 CAD) |
 | Cible 1 | 283.99 |
-| Risque/action | 9.06 CAD |
-| Reward/action | 25.97 CAD |
-| Ratio R:R | **2.9:1** |
+| Risque/action | 2.68 CAD |
+| Reward/action | 30.99 CAD |
+| Ratio R:R | **11.6:1** |
 
 ---
 
@@ -55,28 +55,28 @@
 
 **Position IBKR :**
 - Side: **Long** · Qty: **13**
-- Prix d'entrée moyen: **199.92** · Dernier: **200.24** (null)
-- P/L latent: **-8.25 CAD** (0.16%)
-- P/L du jour: -12.4 CAD
+- Prix d'entrée moyen: **199.92** · Dernier: **199.04** (null)
+- P/L latent: **-11.5 CAD** (-0.44%)
+- P/L du jour: -15.6 CAD
 
 **Analyse technique (Momentum V4 [BBD-B Backtest]) :**
 
 | TF | Prix | EMA F/M/S | Aligné | ADX | Donchian Hi/Lo | Chandelier | BRK | PB | ADD | EXIT | Pyr |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| Daily | 200.24 | 187.57 / 187.27 / 186.34 | ✅ | 20.9 | 226.32 / 155.42 | 164.86 | 0 | 0 | 0 | 0 | 0/2 |
-| 4h | 200.28 | 192.03 / 187.65 / 187.34 | ✅ | 19.7 | 211.55 / 164.37 | 178.34 | 0 | 0 | 0 | 0 | 0/2 |
+| Daily | 199.28 | 189.24 / 188.16 / 186.8 | ✅ | 20.2 | 226.32 / 155.42 | 167.08 | 0 | 0 | 0 | 0 | 0/2 |
+| 4h | 199.28 | 193.06 / 188.52 / 187.76 | ✅ | 19.8 | 211.55 / 164.69 | 179.45 | 0 | 0 | 0 | 0 | 0/2 |
 
 **Recommandation :**
 
-> ✅ **HOLD** — Gold Pro: structure haussière intacte, ADX 20.9. Let winners run.
+> ✅ **HOLD** — Gold Pro: structure haussière intacte, ADX 20.2. Let winners run.
 
 | | |
 |---|---|
-| Stop-loss suggéré | **164.86** (si touché, P/L = -455.78 CAD) |
+| Stop-loss suggéré | **167.08** (si touché, P/L = -426.92 CAD) |
 | Cible 1 | 226.32 |
-| Risque/action | 35.38 CAD |
-| Reward/action | 26.08 CAD |
-| Ratio R:R | **0.7:1** |
+| Risque/action | 32.2 CAD |
+| Reward/action | 27.04 CAD |
+| Ratio R:R | **0.8:1** |
 
 ---
 
@@ -84,9 +84,9 @@
 
 **Position IBKR :**
 - Side: **Long** · Qty: **17**
-- Prix d'entrée moyen: **25.97** · Dernier: **30.97** (null)
-- P/L latent: **+85 CAD** (19.25%)
-- P/L du jour: +0 CAD
+- Prix d'entrée moyen: **25.97** · Dernier: **31.87** (null)
+- P/L latent: **+69.87 CAD** (22.72%)
+- P/L du jour: -15.1 CAD
 
 **Analyse technique (Momentum V4 [BBD-B Backtest]) :**
 
