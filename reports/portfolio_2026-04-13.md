@@ -1,5 +1,5 @@
 # Analyse Portefeuille IBKR — 2026-04-13
-> Généré à 08:53:48 ET · 3 position(s) · Multi-TF Daily + 4h · Indicateurs par ticker
+> Généré à 08:57:58 ET · 3 position(s) · Multi-TF Daily + 4h · Indicateurs par ticker
 
 ## Résumé du compte
 
@@ -8,15 +8,15 @@
 | Positions ouvertes | **3** |
 | Coût total | 7785.25 CAD |
 | Valeur marché | 7773.97 CAD |
-| P/L latent | **-22.74 CAD** |
-| P/L du jour | -11.4 CAD |
+| P/L latent | **-23.65 CAD** |
+| P/L du jour | -12.4 CAD |
 
 ## Vue d'ensemble
 
 | Ticker | Indic | Qty | Avg | Last | P/L CAD | P/L % | Signal D | Aligné 4h | Action |
 |---|---|---|---|---|---|---|---|---|---|
 | **TSX:BBD.B** | V4 | 18 | 263.6 | 258.02 | -100.4 | -2.1% | - | ✅ | ✅ **HOLD** |
-| **TSX:WPM** | V4 | 13 | 199.92 | 200.24 | -7.34 | 0.2% | - | ✅ | ✅ **HOLD** |
+| **TSX:WPM** | V4 | 13 | 199.92 | 200.24 | -8.25 | 0.2% | - | ✅ | ✅ **HOLD** |
 | **TSX:CGG** | V4 | 17 | 25.97 | 30.97 | +85 | 19.3% | - | ⚪ | ⚪ **WATCH** |
 
 ---
@@ -56,8 +56,8 @@
 **Position IBKR :**
 - Side: **Long** · Qty: **13**
 - Prix d'entrée moyen: **199.92** · Dernier: **200.24** (null)
-- P/L latent: **-7.34 CAD** (0.16%)
-- P/L du jour: -11.4 CAD
+- P/L latent: **-8.25 CAD** (0.16%)
+- P/L du jour: -12.4 CAD
 
 **Analyse technique (Momentum V4 [BBD-B Backtest]) :**
 
