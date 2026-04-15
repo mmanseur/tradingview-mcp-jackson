@@ -37,6 +37,7 @@ import * as chart from '../core/chart.js';
 import * as data from '../core/data.js';
 import { readIbkrPositions, toTradingViewSymbol } from './ibkr_positions.js';
 import { sendReportEmail } from '../core/mailer.js';
+import { compareStrategies } from '../core/backtester.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..');
@@ -117,6 +118,24 @@ const TOOLS = [
       type: 'object',
       properties: {},
       required: [],
+    },
+  },
+  {
+    name: 'compare_strategies',
+    description:
+      'Compare les 7 stratégies disponibles sur un symbole TSX via backtest Yahoo Finance 3 ans. ' +
+      'Stratégies: Momentum V4, Gold Momentum Pro, MACD Cross, Supertrend, Donchian Pure, RSI Reversion, BB Squeeze. ' +
+      'Utiliser quand un ticker sous-performe ou avant de changer de stratégie. ' +
+      'Retourne le classement par score risque-ajusté et indique si un changement est recommandé.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'Symbole Yahoo Finance, ex: "BBD-B.TO", "WPM.TO", "CLS.TO"',
+        },
+      },
+      required: ['symbol'],
     },
   },
   {
@@ -246,6 +265,15 @@ async function executeTool(name, input) {
       }
     }
 
+    case 'compare_strategies': {
+      const { symbol } = input;
+      try {
+        return await compareStrategies(symbol);
+      } catch (err) {
+        return { error: `Erreur compare_strategies: ${err.message}` };
+      }
+    }
+
     default:
       return { error: `Outil inconnu: ${name}` };
   }
@@ -280,6 +308,13 @@ const SYSTEM_PROMPT = `Tu es un agent de trading swing sur le TSX (Toronto Stock
 3. Pour chaque ticker de l'univers sans position: chercher des nouvelles entrées
 4. Formuler des recommandations claires et chiffrées
 5. Envoyer des alertes email SEULEMENT pour les signaux BRK, SELL, EXIT urgents
+
+## Quand utiliser compare_strategies
+- Un ticker est en WEAK depuis plus de 5 séances consécutives
+- Une position est en drawdown > 15% sans signal EXIT clair
+- Un ticker n'a pas généré de signal BRK/PB depuis plus de 30 jours
+- L'utilisateur demande explicitement une comparaison
+→ Lancer compare_strategies(symbol), présenter le top 3 et indiquer si changement recommandé
 
 ## Format de recommandation
 Pour chaque ticker:
