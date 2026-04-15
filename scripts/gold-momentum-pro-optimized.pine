@@ -1,0 +1,204 @@
+//@version=6
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║         GOLD MOMENTUM PRO — HIGH FREQUENCY v5                   ║
+// ║  Objectif: 12-25 trades/an | Return > 100% | DD < 30%          ║
+// ╠══════════════════════════════════════════════════════════════════╣
+// ║  Problème v4: ADX > 35 → trop restrictif → 2-4 trades/an       ║
+// ║  Solution v5:                                                    ║
+// ║  • ADX ramené à 18 (gold est souvent en tendance modérée)       ║
+// ║  • Donchian entrée 55→40 (capte les breakouts plus tôt)         ║
+// ║  • Ajout signal EMA-PB (pullback classique sur EMA13)           ║
+// ║  • Chandelier 4.0× (vs 3.0 trop serré = sorties prématurées)   ║
+// ║  • Exit Donchian 20→15 (réactif mais pas trop)                  ║
+// ╚══════════════════════════════════════════════════════════════════╝
+
+strategy("Gold Momentum Pro [HF v5]",
+     overlay                = true,
+     pyramiding             = 2,
+     initial_capital        = 9000,
+     default_qty_type       = strategy.percent_of_equity,
+     default_qty_value      = 40,
+     commission_type        = strategy.commission.cash_per_order,
+     commission_value       = 1,
+     slippage               = 2,
+     process_orders_on_close= true,
+     calc_on_every_tick     = false)
+
+// ─── INPUTS ───────────────────────────────────────────────────────
+emaFastLen    = input.int(13,   "EMA Rapide",                minval=2,  group="EMAs — Turtle")
+emaMidLen     = input.int(26,   "EMA Milieu",                minval=5,  group="EMAs — Turtle")
+emaSlowLen    = input.int(55,   "EMA Lente",                 minval=10, group="EMAs — Turtle")
+
+entryLookback = input.int(40,   "Donchian Entrée (BRK)",     minval=15, group="Donchian")
+addLookback   = input.int(20,   "Donchian Add",              minval=5,  group="Donchian")
+exitLookback  = input.int(15,   "Donchian Sortie",           minval=5,  group="Donchian")
+
+atrLen        = input.int(14,   "ATR Longueur",              minval=5,  group="Risque")
+chandelierLen = input.int(22,   "Chandelier Longueur",       minval=5,  group="Risque")
+chandelierMult= input.float(4.0,"Chandelier ATR Mult",       step=0.1,  group="Risque")
+atrStopMult   = input.float(2.0,"ATR Stop Initial",          step=0.1,  group="Risque")
+maxAdds       = input.int(2,    "Max Adds (pyramiding)",     minval=0, maxval=3, group="Risque")
+
+adxLen        = input.int(14,   "ADX Longueur",              minval=5,  group="Filtres")
+adxThreshold  = input.float(18.0,"ADX Seuil minimum",        step=1.0,  group="Filtres")
+useAdxFilter  = input.bool(true, "Activer filtre ADX",                  group="Filtres")
+usePb         = input.bool(true, "Activer signal PB (EMA)",             group="Filtres")
+
+// ─── CALCULS ──────────────────────────────────────────────────────
+emaFast = ta.ema(close, emaFastLen)
+emaMid  = ta.ema(close, emaMidLen)
+emaSlow = ta.ema(close, emaSlowLen)
+atr     = ta.atr(atrLen)
+rsi14   = ta.rsi(close, 14)
+
+[diPlus, diMinus, adx] = ta.dmi(adxLen, adxLen)
+
+// Donchian channels (high[1]/low[1] → pas de lookahead)
+entryHigh = ta.highest(high[1], entryLookback)
+addHigh   = ta.highest(high[1], addLookback)
+exitLow   = ta.lowest(low[1],   exitLookback)
+chandelier = ta.highest(high, chandelierLen) - atr * chandelierMult
+
+alignedBull = emaFast > emaMid and emaMid > emaSlow
+
+// ─── FILTRES ──────────────────────────────────────────────────────
+adxOk = not useAdxFilter or adx > adxThreshold
+
+// ─── SIGNAUX D'ENTRÉE ─────────────────────────────────────────────
+
+// BRK : cassure Donchian 40 jours (vs 55 avant — plus fréquent)
+isBreakout = close > entryHigh and alignedBull and adxOk
+             and strategy.position_size == 0
+
+// PB : pullback sur EMA13 en tendance haussière
+// Plus fréquent que le breakout Donchian — typique du gold en uptrend
+isPullback = usePb
+             and strategy.position_size == 0
+             and alignedBull and adxOk
+             and low <= emaFast * 1.006
+             and close > emaFast
+             and close > open
+             and rsi14 > 35 and rsi14 < 72
+             and not isBreakout
+
+// ADD : pyramid sur nouveau breakout Donchian 20j en position
+isAdd  = strategy.position_size > 0 and close > addHigh and adxOk
+
+// SORTIE : Donchian 15j cassé OU chandelier cassé
+isExitDonchian   = strategy.position_size > 0 and close < exitLow
+isExitChandelier = strategy.position_size > 0 and close < chandelier
+isExit = isExitDonchian or isExitChandelier
+
+// SORTIE FAIBLESSE : prix sous EMA lente → couper
+isWeak = strategy.position_size > 0 and close < emaSlow and not isExit
+
+// ─── GESTION ADDS ─────────────────────────────────────────────────
+var int addsUsed = 0
+if strategy.position_size == 0 and strategy.position_size[1] > 0
+    addsUsed := 0
+if isAdd and addsUsed < maxAdds
+    addsUsed += 1
+
+// ─── VARIABLES POSITION ───────────────────────────────────────────
+var float posEntryPrice = na
+var float initialStop   = na
+
+// ─── ORDRES ───────────────────────────────────────────────────────
+if isBreakout
+    posEntryPrice := close
+    initialStop   := close - atr * atrStopMult
+    strategy.entry("Long", strategy.long, comment="BRK")
+
+if isPullback
+    posEntryPrice := close
+    initialStop   := close - atr * atrStopMult
+    strategy.entry("Long", strategy.long, comment="PB")
+
+if isAdd and addsUsed <= maxAdds and strategy.position_size > 0
+    strategy.entry("Add" + str.tostring(addsUsed), strategy.long, comment="ADD")
+
+if isExit
+    strategy.close_all(comment=isExitChandelier ? "CHAN" : "EXIT")
+    posEntryPrice := na
+    initialStop   := na
+
+if isWeak
+    strategy.close_all(comment="WEAK")
+    posEntryPrice := na
+    initialStop   := na
+
+// ─── VISUALISATION ────────────────────────────────────────────────
+plot(emaFast,    "EMA 13",           color=color.new(color.yellow, 30), linewidth=1)
+plot(emaMid,     "EMA 26",           color=color.new(color.orange, 30), linewidth=1)
+plot(emaSlow,    "EMA 55",           color=color.new(color.red,    20), linewidth=2)
+plot(entryHigh,  "Donchian Hi (40)", color=color.new(color.green,  0),  linewidth=1, style=plot.style_stepline)
+plot(exitLow,    "Donchian Lo (15)", color=color.new(color.red,    0),  linewidth=1, style=plot.style_stepline)
+plot(chandelier, "Chandelier (4×)",  color=color.new(color.aqua,   5),  linewidth=1, style=plot.style_linebr)
+
+// Zone PB autour de EMA13
+pb_upper = emaFast * 1.006
+pb_lower = emaFast * 0.994
+pp1 = plot(alignedBull ? pb_upper : na, display=display.none)
+pp2 = plot(alignedBull ? pb_lower : na, display=display.none)
+fill(pp1, pp2, color=color.new(color.yellow, 88), title="Zone PB EMA13")
+
+bgcolor(alignedBull ? color.new(color.green, 93) : color.new(color.red, 93))
+
+// Labels
+if isBreakout
+    label.new(bar_index, low,  "BRK\n" + str.tostring(close, "#.##"),
+              style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small)
+if isPullback
+    label.new(bar_index, low,  "PB\n"  + str.tostring(close, "#.##"),
+              style=label.style_label_up, color=color.teal,  textcolor=color.white, size=size.small)
+if isAdd and strategy.position_size > 0
+    label.new(bar_index, high, "ADD\n" + str.tostring(close, "#.##"),
+              style=label.style_label_down, color=color.blue, textcolor=color.white, size=size.small)
+if isExit and strategy.position_size[1] > 0
+    label.new(bar_index, high, "EXIT\n"+ str.tostring(close, "#.##"),
+              style=label.style_label_down, color=color.red,  textcolor=color.white, size=size.small)
+
+// ─── DATA WINDOW (scanner) ────────────────────────────────────────
+plot(adx,                title="ADX",           display=display.data_window)
+plot(isBreakout ? 1 : 0, title="BRK",           display=display.data_window)
+plot(isPullback ? 1 : 0, title="PB",            display=display.data_window)
+plot(isAdd      ? 1 : 0, title="ADD",           display=display.data_window)
+plot(isExit     ? 1 : 0, title="EXIT",          display=display.data_window)
+plot(0,                  title="SELL",          display=display.data_window)
+plot(isWeak     ? 1 : 0, title="WEAK",          display=display.data_window)
+plot(addsUsed,           title="Pyramid Count", display=display.data_window)
+plot(1,                  title="IsGoldPro",     display=display.data_window)
+
+// ─── DASHBOARD ────────────────────────────────────────────────────
+var table dash = table.new(position.top_right, 2, 9,
+     bgcolor=color.new(color.black, 65), border_color=color.gray, border_width=1)
+if barstate.islast
+    inPos    = strategy.position_size > 0
+    adxColor = adx > adxThreshold ? color.new(color.green, 30) : color.new(color.red, 40)
+    rsiColor = rsi14 > 70 ? color.red : rsi14 < 40 ? color.lime : color.yellow
+    table.cell(dash, 0, 0, "Gold Pro HF v5",       text_color=color.white, bgcolor=color.new(color.orange, 55), text_size=size.small)
+    table.cell(dash, 1, 0, inPos ? "EN POSITION" : "CASH", text_color=color.white, bgcolor=inPos ? color.new(color.green, 30) : color.new(color.gray, 50), text_size=size.small)
+    table.cell(dash, 0, 1, "EMAs",        text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 1, "13 / 26 / 55",text_color=color.yellow, text_size=size.tiny)
+    table.cell(dash, 0, 2, "Donchian",    text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 2, str.tostring(entryLookback)+"/"+str.tostring(addLookback)+"/"+str.tostring(exitLookback), text_color=color.yellow, text_size=size.tiny)
+    table.cell(dash, 0, 3, "ADX",         text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 3, str.tostring(math.round(adx,1)) + " (seuil "+str.tostring(adxThreshold)+")", text_color=adx > adxThreshold ? color.green : color.red, text_size=size.tiny)
+    table.cell(dash, 0, 4, "RSI 14",      text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 4, str.tostring(math.round(rsi14,1)), text_color=rsiColor, text_size=size.tiny)
+    table.cell(dash, 0, 5, "Chandelier",  text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 5, str.tostring(math.round(chandelier, 2)), text_color=color.aqua, text_size=size.tiny)
+    table.cell(dash, 0, 6, "Donch Lo",    text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 6, str.tostring(math.round(exitLow, 2)),    text_color=color.red,  text_size=size.tiny)
+    table.cell(dash, 0, 7, "Adds",        text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 7, str.tostring(addsUsed)+"/"+str.tostring(maxAdds), text_color=color.aqua, text_size=size.tiny)
+    sigNow = isBreakout ? "🔥 BRK" : isPullback ? "📌 PB" : isAdd ? "➕ ADD" : isExit ? "🔴 EXIT" : isWeak ? "⚠️ WEAK" : "—"
+    table.cell(dash, 0, 8, "Signal",      text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 8, sigNow,        text_color=color.white,  text_size=size.tiny)
+
+// ─── ALERTES ──────────────────────────────────────────────────────
+alertcondition(isBreakout, title="BRK",  message="Gold BRK sur {{ticker}} — {{close}}")
+alertcondition(isPullback, title="PB",   message="Gold PB sur {{ticker}} — {{close}}")
+alertcondition(isAdd,      title="ADD",  message="Gold ADD sur {{ticker}} — {{close}}")
+alertcondition(isExit,     title="EXIT", message="Gold EXIT sur {{ticker}} — {{close}}")
+alertcondition(isWeak,     title="WEAK", message="Gold WEAK sur {{ticker}} — {{close}}")

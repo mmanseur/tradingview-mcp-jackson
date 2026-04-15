@@ -1,0 +1,195 @@
+//@version=6
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║           MOMENTUM V4 — HIGH FREQUENCY v3                       ║
+// ║  Objectif: 10-20 trades/an | Return > 80% | DD < 20%           ║
+// ╠══════════════════════════════════════════════════════════════════╣
+// ║  3 types de signaux d'entrée (vs 1 seul avant):                 ║
+// ║  • BRK : Breakout EMA cross + volume (rare, haute conviction)   ║
+// ║  • PB  : Pullback sur EMA Fast (plus fréquent)                  ║
+// ║  • CONT: Continuation (nouveau ATH intratrend)                  ║
+// ╠══════════════════════════════════════════════════════════════════╣
+// ║  Baseline V4 original: +112.61% | 20 trades | PF 4.635         ║
+// ╚══════════════════════════════════════════════════════════════════╝
+
+strategy("Momentum V4 [High Frequency v3]", overlay=true,
+         initial_capital=9000,
+         default_qty_type=strategy.percent_of_equity,
+         default_qty_value=100,
+         commission_type=strategy.commission.percent,
+         commission_value=0.1,
+         slippage=1,
+         pyramiding=2)
+
+// ─── INPUTS ───────────────────────────────────────────────────────
+emaFastLen  = input.int(8,    "EMA Rapide",              minval=2,  group="EMAs")
+emaMidLen   = input.int(21,   "EMA Milieu",              minval=5,  group="EMAs")
+emaSlowLen  = input.int(50,   "EMA Lente",               minval=10, group="EMAs")
+
+volMultBrk  = input.float(1.3, "Volume Min BRK (×SMA20)",step=0.1, group="Filtres")
+volMultPb   = input.float(0.8, "Volume Min PB  (×SMA20)",step=0.1, group="Filtres")
+cooldown    = input.int(2,     "Cooldown (barres)",       minval=1, group="Filtres")
+
+atrLen      = input.int(14,   "ATR Longueur",             minval=5, group="Risque")
+atrStopMult = input.float(1.8,"ATR Stop Mult",            step=0.1, group="Risque")
+tp1R        = input.float(2.0,"TP1 Ratio R:R",            step=0.1, group="Risque")
+tp2R        = input.float(4.0,"TP2 Ratio R:R",            step=0.1, group="Risque")
+
+usePb       = input.bool(true, "Activer signal PB",                 group="Signaux")
+useCont     = input.bool(true, "Activer signal Continuation",       group="Signaux")
+contLookback= input.int(10,   "Lookback nouveau high (CONT)",       group="Signaux")
+
+// ─── CALCULS ──────────────────────────────────────────────────────
+ema1   = ta.ema(close, emaFastLen)
+ema2   = ta.ema(close, emaMidLen)
+ema3   = ta.ema(close, emaSlowLen)
+atr    = ta.atr(atrLen)
+volSma = ta.sma(volume, 20)
+rsi14  = ta.rsi(close, 14)
+
+bull_align  = ema1 > ema2 and ema2 > ema3
+above_all   = close > ema1 and close > ema2 and close > ema3
+bull_candle = close > open
+
+// ─── SIGNAL BRK : Breakout classique avec EMA crossover ──────────
+cross_up    = ta.crossover(ema1, ema2)
+vol_ok_brk  = volume >= volSma * volMultBrk
+brk_raw     = bull_align and vol_ok_brk and bull_candle and above_all and cross_up
+
+// ─── SIGNAL PB : Pullback propre sur EMA Fast ─────────────────────
+// Prix revient toucher EMA1, repart à la hausse → entrée de qualité
+// Conditions: alignement haussier + touche EMA1 + clôture au-dessus
+pb_touch    = low <= ema1 * 1.005 and close > ema1  // touche EMA±0.5%
+vol_ok_pb   = volume >= volSma * volMultPb
+rsi_ok_pb   = rsi14 > 40 and rsi14 < 75             // pas suracheté ni survendu
+pb_raw      = bull_align and pb_touch and bull_candle and vol_ok_pb and rsi_ok_pb and strategy.position_size == 0
+
+// ─── SIGNAL CONT : Continuation dans la tendance ─────────────────
+// Prix fait un nouveau ATH sur la fenêtre N, momentum intacte
+// (permet de capter les suites de tendance après BRK/PB)
+highest_n   = ta.highest(high, contLookback)
+cont_raw    = bull_align and high >= highest_n and close > ema2 and bull_candle
+             and volume >= volSma * volMultPb and strategy.position_size == 0
+
+// ─── COOLDOWN ─────────────────────────────────────────────────────
+var int bars_cd = 99
+any_entry = brk_raw or (usePb and pb_raw) or (useCont and cont_raw)
+if strategy.position_size == 0 and bars_cd < cooldown
+    any_entry := false
+bars_cd := (strategy.position_size[1] > 0 and strategy.position_size == 0) ? 0
+         : strategy.position_size == 0 ? bars_cd + 1
+         : bars_cd
+
+brk_sig  = brk_raw  and bars_cd >= cooldown and strategy.position_size == 0
+pb_sig   = usePb  and pb_raw  and bars_cd >= cooldown
+cont_sig = useCont and cont_raw and bars_cd >= cooldown
+
+// ─── ADD sur PB en position ────────────────────────────────────────
+// Si déjà en position Long et pullback propre → add (pyramiding=2)
+add_sig = bull_align and strategy.position_size > 0
+         and strategy.position_size < strategy.equity / close * 1.5
+         and low <= ema1 * 1.008 and close > ema1
+         and bull_candle and volume >= volSma * 0.7
+
+// ─── STOP & TP DYNAMIQUES ─────────────────────────────────────────
+var float entry_p   = na
+var float sl_level  = na
+
+// ─── ENTRÉES ──────────────────────────────────────────────────────
+sig_type = brk_sig ? "BRK" : pb_sig ? "PB" : cont_sig ? "CONT" : ""
+
+if brk_sig or pb_sig or cont_sig
+    entry_p  := close
+    sl_p     = close - atr * atrStopMult
+    tp1_p    = close + atr * atrStopMult * tp1R
+    tp2_p    = close + atr * atrStopMult * tp2R
+    sl_level := sl_p
+    strategy.entry("Long", strategy.long, comment=sig_type)
+    strategy.exit("TP1", "Long", qty_percent=50,  limit=tp1_p, stop=sl_p)
+    strategy.exit("TP2", "Long", qty_percent=100, limit=tp2_p, stop=sl_p)
+
+// Add en position
+if add_sig and not na(entry_p)
+    strategy.entry("Add", strategy.long, comment="ADD")
+
+// Break-even après TP1
+if strategy.position_size > 0 and not na(entry_p)
+    if high >= entry_p + atr * atrStopMult * tp1R
+        strategy.exit("BE", "Long", stop=entry_p)
+
+// ─── SIGNAL SELL : retournement baissier ──────────────────────────
+bear_align = ema1 < ema2 and ema2 < ema3
+cross_dn   = ta.crossunder(ema1, ema2)
+sell_sig   = strategy.position_size > 0 and bear_align and cross_dn
+             and close < open and close < ema1 and volume >= volSma
+
+if sell_sig
+    strategy.close_all(comment="SELL")
+    entry_p  := na
+    sl_level := na
+
+// ─── VISUALISATION ────────────────────────────────────────────────
+plot(ema1, "EMA Fast", color=color.new(color.lime,   10), linewidth=1)
+plot(ema2, "EMA Mid",  color=color.new(color.orange, 10), linewidth=1)
+plot(ema3, "EMA Slow", color=color.new(color.red,    10), linewidth=2)
+
+// Zone de support (EMA1 ± 0.5%) pour visualiser la zone PB
+upper_pb = ema1 * 1.005
+lower_pb = ema1 * 0.995
+p1 = plot(bull_align ? upper_pb : na, display=display.none)
+p2 = plot(bull_align ? lower_pb : na, display=display.none)
+fill(p1, p2, color=color.new(color.lime, 88), title="Zone PB")
+
+bgcolor(bull_align ? color.new(color.green, 93) : bear_align ? color.new(color.red, 93) : na)
+
+// Labels
+if brk_sig
+    label.new(bar_index, low, "BRK", style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small)
+if pb_sig and usePb
+    label.new(bar_index, low, "PB",  style=label.style_label_up, color=color.teal,  textcolor=color.white, size=size.small)
+if cont_sig and useCont
+    label.new(bar_index, low, "CONT",style=label.style_label_up, color=color.blue,  textcolor=color.white, size=size.small)
+if sell_sig
+    label.new(bar_index, high,"SELL",style=label.style_label_down,color=color.red,  textcolor=color.white, size=size.small)
+
+// ─── DATA WINDOW (pour scanner) ───────────────────────────────────
+plot(rsi14,              title="RSI",   display=display.data_window)
+plot(brk_sig  ? 1 : 0,  title="BRK",   display=display.data_window)
+plot(pb_sig   ? 1 : 0,  title="PB",    display=display.data_window)
+plot(cont_sig ? 1 : 0,  title="CONT",  display=display.data_window)
+plot(sell_sig ? 1 : 0,  title="SELL",  display=display.data_window)
+plot(add_sig  ? 1 : 0,  title="ADD",   display=display.data_window)
+plot(0,                  title="EXIT",  display=display.data_window)
+plot(0,                  title="WEAK",  display=display.data_window)
+plot(0,                  title="IsGoldPro", display=display.data_window)
+
+// ─── DASHBOARD ────────────────────────────────────────────────────
+var table dash = table.new(position.top_right, 2, 8,
+     bgcolor=color.new(color.black, 65), border_color=color.gray, border_width=1)
+if barstate.islast
+    inPos    = strategy.position_size > 0
+    posColor = inPos ? color.new(color.green, 30) : color.new(color.gray, 50)
+    rsiColor = rsi14 > 70 ? color.red : rsi14 < 40 ? color.lime : color.yellow
+    table.cell(dash, 0, 0, "MOM V4 HF v3",      text_color=color.white, bgcolor=color.new(color.blue, 55), text_size=size.small)
+    table.cell(dash, 1, 0, inPos ? "EN POSITION" : "CASH", text_color=color.white, bgcolor=posColor, text_size=size.small)
+    table.cell(dash, 0, 1, "EMAs",   text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 1, str.tostring(emaFastLen)+"/"+str.tostring(emaMidLen)+"/"+str.tostring(emaSlowLen), text_color=color.yellow, text_size=size.tiny)
+    table.cell(dash, 0, 2, "RSI 14", text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 2, str.tostring(math.round(rsi14,1)), text_color=rsiColor, text_size=size.tiny)
+    table.cell(dash, 0, 3, "ATR",    text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 3, str.tostring(math.round(atr,2)),   text_color=color.yellow, text_size=size.tiny)
+    table.cell(dash, 0, 4, "Stop",   text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 4, na(entry_p) ? "—" : str.tostring(math.round(entry_p - atr * atrStopMult, 2)), text_color=color.red, text_size=size.tiny)
+    table.cell(dash, 0, 5, "TP1 2R", text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 5, na(entry_p) ? "—" : str.tostring(math.round(entry_p + atr * atrStopMult * tp1R, 2)), text_color=color.lime, text_size=size.tiny)
+    table.cell(dash, 0, 6, "TP2 4R", text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 6, na(entry_p) ? "—" : str.tostring(math.round(entry_p + atr * atrStopMult * tp2R, 2)), text_color=color.lime, text_size=size.tiny)
+    table.cell(dash, 0, 7, "Signal", text_color=color.gray,   text_size=size.tiny)
+    sigNow = brk_sig ? "🔥 BRK" : pb_sig ? "📌 PB" : cont_sig ? "➡️ CONT" : sell_sig ? "🔴 SELL" : "—"
+    table.cell(dash, 1, 7, sigNow,   text_color=color.white,  text_size=size.tiny)
+
+// ─── ALERTES ──────────────────────────────────────────────────────
+alertcondition(brk_sig,  title="BRK",  message="V4 BREAKOUT sur {{ticker}} — {{close}}")
+alertcondition(pb_sig,   title="PB",   message="V4 PULLBACK sur {{ticker}} — {{close}}")
+alertcondition(cont_sig, title="CONT", message="V4 CONTINUATION sur {{ticker}} — {{close}}")
+alertcondition(sell_sig, title="SELL", message="V4 VENTE sur {{ticker}} — {{close}}")
+alertcondition(add_sig,  title="ADD",  message="V4 ADD sur {{ticker}} — {{close}}")
