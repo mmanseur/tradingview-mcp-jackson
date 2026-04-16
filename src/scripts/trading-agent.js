@@ -60,23 +60,25 @@ async function readIndicator() {
   const v = study?.values;
   if (!v) return null;
 
-  const isGoldPro = (toNum(v['IsGoldPro']) || 0) > 0;
+  const isGoldPro    = (toNum(v['IsGoldPro'])    || 0) > 0;
+  const isSupertrend = (toNum(v['IsSupertrend']) || 0) > 0;
   return {
-    emaFast:      toNum(v['EMA Fast']),
-    emaMid:       toNum(v['EMA Mid']),
-    emaSlow:      toNum(v['EMA Slow']),
-    donchianHi:   toNum(v['Donchian Hi']),
-    donchianLo:   toNum(v['Donchian Lo']),
-    chandelier:   toNum(v['Chandelier']),
-    adx:          toNum(v['ADX']),
-    BRK:          toNum(v['BRK'])  || 0,
-    PB:           toNum(v['PB'])   || 0,
-    ADD:          toNum(v['ADD'])  || 0,
-    EXIT:         toNum(v['EXIT']) || 0,
-    SELL:         toNum(v['SELL']) || 0,
-    WEAK:         toNum(v['WEAK']) || 0,
-    pyramidCount: toNum(v['Pyramid Count']) || 0,
-    variant:      isGoldPro ? 'gold-pro' : 'v4',
+    emaFast:         toNum(v['EMA Fast']),
+    emaMid:          toNum(v['EMA Mid']),
+    emaSlow:         toNum(v['EMA Slow']),
+    donchianHi:      toNum(v['Donchian Hi']),
+    donchianLo:      toNum(v['Donchian Lo']),
+    chandelier:      toNum(v['Chandelier']),
+    adx:             toNum(v['ADX']),
+    BRK:             toNum(v['BRK'])  || 0,
+    PB:              toNum(v['PB'])   || 0,
+    ADD:             toNum(v['ADD'])  || 0,
+    EXIT:            toNum(v['EXIT']) || 0,
+    SELL:            toNum(v['SELL']) || 0,
+    WEAK:            toNum(v['WEAK']) || 0,
+    pyramidCount:    toNum(v['Pyramid Count']) || 0,
+    supertrendLevel: toNum(v['Supertrend Level']),
+    variant:         isGoldPro ? 'gold-pro' : isSupertrend ? 'supertrend' : 'v4',
   };
 }
 
@@ -289,25 +291,41 @@ const SYSTEM_PROMPT = `Tu es un agent de trading swing sur le TSX (Toronto Stock
 - Objectif: +50%/an en swing trading (quelques jours à quelques semaines)
 
 ## Signaux de l'indicateur
-- **BRK** = Breakout → signal d'ACHAT (entrée en position)
-- **PB** = Pullback → signal d'ACHAT en repli sur EMA (add si déjà en position)
-- **ADD** = Pyramiding → ajouter à une position gagnante (Gold Pro uniquement, max 2)
-- **EXIT** = Sortie → le chandelier ou Donchian Lo cassé → VENDRE
-- **SELL** = Vente → alignement baissier + EMA cross → VENDRE
-- **WEAK** = Faiblesse → prix sous EMA Fast → surveiller mais ne pas vendre encore
+- **BRK** = Breakout → ENTRÉE LONG (achat)
+- **PB**  = Pullback → ENTRÉE LONG en repli sur EMA (ou add si déjà en position)
+- **ADD** = Pyramiding → AJOUTER au long existant (Gold Pro uniquement, max 2)
+- **EXIT** = Sortie → FERMER LONG (chandelier ou Donchian Lo cassé)
+- **SELL** = Vente → FERMER LONG + évaluer SHORT (alignement baissier + EMA cross)
+- **WEAK** = Faiblesse → surveiller, NE PAS agir encore
+
+## Logique LONG / SHORT
+**LONG** — entrer quand:
+- BRK ou PB sur Daily ET 4h en bull_align (EMA Fast > Mid > Slow)
+- Supertrend crossUp (BBD-B/CLS) ou Donchian breakout (WPM/AEM)
+
+**SHORT** — entrer quand TOUTES ces conditions sont réunies:
+- Signal SELL sur Daily (bear_align + EMA crossunder)
+- 4h aussi en bear_align (EMA Fast < Mid < Slow)
+- Prix sous les 3 EMAs
+- Confirmation: ADX > 20 ou volume > 1.3x moyenne
+- NE PAS shorter un ticker en simple WEAK sans SELL confirmé
+
+**FERMER LONG** — quand EXIT ou SELL sur Daily
+
+**ATTENDRE** — tous les autres cas (NEUTRE, WEAK seul, signal non confirmé sur 4h)
 
 ## Règles de décision
-1. Signal bullish valide: BRK ou PB sur Daily ET 4h alignés haussiers (EMA Fast > Mid > Slow)
-2. Signal de sortie: EXIT ou SELL sur Daily → fermer la position
-3. Double confirmation: signal identique sur Daily ET 4h = signal fort
-4. Éviter: volumes faibles (< 1.3x moyenne), ADX < 20 (Gold Pro)
+1. Double timeframe obligatoire: signal Daily + confirmation 4h
+2. SHORT = signal fort seulement, pas sur WEAK ni sur simple repli
+3. Éviter: volumes faibles (< 1.3x moyenne), ADX < 20 (Gold Pro)
+4. Stop max 3% du capital = ~270$ par position
 
 ## Ton processus pour chaque session
 1. Lire les positions IBKR ouvertes (get_positions)
-2. Pour chaque position: analyser le symbole (analyze_symbol)
-3. Pour chaque ticker de l'univers sans position: chercher des nouvelles entrées
-4. Formuler des recommandations claires et chiffrées
-5. Envoyer des alertes email SEULEMENT pour les signaux BRK, SELL, EXIT urgents
+2. Pour chaque position: analyser le symbole (analyze_symbol) → CONSERVER / FERMER / INVERSER
+3. Pour chaque ticker de l'univers sans position: chercher entrées LONG ou SHORT
+4. Formuler des recommandations avec action explicite (LONG / SHORT / FERMER / ATTENDRE)
+5. Envoyer des alertes email SEULEMENT pour les signaux LONG urgent, SHORT, EXIT
 
 ## Quand utiliser compare_strategies
 - Un ticker est en WEAK depuis plus de 5 séances consécutives
@@ -316,15 +334,39 @@ const SYSTEM_PROMPT = `Tu es un agent de trading swing sur le TSX (Toronto Stock
 - L'utilisateur demande explicitement une comparaison
 → Lancer compare_strategies(symbol), présenter le top 3 et indiquer si changement recommandé
 
-## Format de recommandation
-Pour chaque ticker:
-- Signal: BRK / PB / ADD / EXIT / SELL / NEUTRE
-- Timeframes: Daily + 4h
-- Prix cible / stop loss
-- Taille suggérée (max 3% de risque = ~270$ stop par position)
-- Urgence: URGENT / SURVEILLER / INFO
+## Format de sortie — STRICT, NE PAS DÉVIER
 
-Sois concis et factuel. Pas de blabla. Décisions basées uniquement sur les données.`;
+RÈGLE ABSOLUE: chaque ticker DOIT utiliser exactement ce bloc, rien de plus, rien de moins.
+Ne pas ajouter de texte narratif, d'analyse supplémentaire, de bullets, ni de commentaires hors du bloc.
+
+Exemple exact attendu:
+--- BBD-B.TO ---
+ACTION    : LONG
+Signal D  : BRK
+Signal 4h : bull_align
+Prix      : 8.45$
+Entrée    : 8.45$ (marché immédiat)
+Stop      : 7.95$ (-5.9% / -230$)
+Cible     : 9.80$ (+16%)
+Taille    : 460 actions (230$ risqué / 2.6% capital)
+Urgence   : URGENT
+
+--- WPM.TO ---
+ACTION    : ATTENDRE
+Signal D  : NEUTRE
+Signal 4h : bull_align
+Prix      : 72.10$
+Entrée    : n/a
+Stop      : n/a
+Cible     : n/a
+Taille    : n/a
+Urgence   : INFO
+
+Les seules valeurs possibles pour ACTION: LONG / SHORT / FERMER LONG / CONSERVER LONG / ATTENDRE
+Pour ATTENDRE: Entrée, Stop, Cible, Taille = n/a
+Calcul Taille: risque max 270$ par position, stop = distance en $ * nb actions
+
+Sois concis et factuel. Zéro texte hors des blocs. Décisions basées uniquement sur les données.`;
 
 // ─── Boucle d'agent principale ───────────────────────────────
 async function runTradingAgent() {
@@ -347,7 +389,7 @@ Effectue l'analyse complète:
 4. Envoie un email pour tout signal urgent
 5. Fournis un rapport final avec recommandations pour toutes les positions
 
-Univers de surveillance si pas en position: BBD-B.TO, WPM.TO, CLS.TO, AEM.TO, CGG.TO, VNP.TO`,
+Univers de surveillance si pas en position: BBD-B.TO, WPM.TO, CLS.TO, AEM.TO, CGG.TO, VNP.TO, SHOP.TO`,
     },
   ];
 

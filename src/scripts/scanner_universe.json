@@ -6,7 +6,8 @@
     "TSX:WPM",
     "TSX:CLS",
     "TSX:AEM",
-    "TSX:VNP"
+    "TSX:VNP",
+    "TSX:SHOP"
   ],
   "tsx60": [
     "TSX:RY", "TSX:TD", "TSX:BNS", "TSX:BMO", "TSX:CM", "TSX:NA",
