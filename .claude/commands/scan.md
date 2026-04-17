@@ -29,8 +29,7 @@ Pour chaque position (et les tickers watchlist sans position) :
 8. `data_get_study_values` → mêmes champs sur 4h
 
 Watchlist à couvrir si pas de position IBKR :
-- BBD.B.TO, WPM.TO, CLS.TO, AEM.TO, CGG.TO, VNP.TO, SHOP.TO
-
+- BBD-B.TO, WPM.TO, CLS.TO, AEM.TO, CGG.TO, VNP.TO, SHOP.TO
 
 ## Étape 3 — Raisonnement IA multi-couches
 
@@ -85,7 +84,6 @@ Génère ce rapport markdown et sauvegarde-le dans `reports/scan_YYYY-MM-DD.md` 
 ## Setups Watchlist (sans position)
 [Tickers avec setup BRK/PB actif — plan d'entrée complet avec sizing]
 
-
 ## Analyse Portfolio Global
 - **Capital estimé investi** : X XXX $ / 9 000 $ (X%)
 - **Cash disponible** : ~X XXX $
@@ -100,8 +98,6 @@ Après avoir sauvegardé le rapport, fais un commit git :
 ```bash
 cd D:/Claude/tradingview-mcp-jackson && git add reports/ && git commit -m "scan IA $(date +%Y-%m-%d) — analyse portefeuille"
 ```
-
-
 
 ## Règles importantes
 - Ne jamais inventer des prix — lire uniquement les données MCP
