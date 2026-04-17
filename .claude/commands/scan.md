@@ -29,7 +29,7 @@ Pour chaque position (et les tickers watchlist sans position) :
 8. `data_get_study_values` → mêmes champs sur 4h
 
 Watchlist à couvrir si pas de position IBKR :
-- BBD-B.TO, WPM.TO, CLS.TO, AEM.TO, CGG.TO, VNP.TO, SHOP.TO
+- BBD.B.TO, WPM.TO, CLS.TO, AEM.TO, CGG.TO, VNP.TO, SHOP.TO
 
 ## Étape 3 — Raisonnement IA multi-couches
 
