@@ -21,10 +21,11 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: src/server_scan/requirements.txt
 
       - name: Install dependencies
         run: |
-          pip install anthropic yfinance pandas numpy
+          pip install -r src/server_scan/requirements.txt
 
       - name: Run scan cloud
         env:
