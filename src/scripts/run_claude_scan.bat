@@ -35,7 +35,7 @@ REM --max-turns 40 : plafond de tours pour eviter boucle infinie
 "%CLAUDE%" ^
   --print "/scan" ^
   --dangerously-skip-permissions ^
-  --max-turns 40 ^
+  --max-turns 80 ^
   >> "%LOGFILE%" 2>&1
 
 set EXIT_CODE=%ERRORLEVEL%
