@@ -1,0 +1,44 @@
+name: Scan IA TSX — positions IBKR
+
+on:
+  push:
+    branches: [trading_routine]
+    paths:
+      - positions.json        # se déclenche UNIQUEMENT si ce fichier change
+
+jobs:
+  scan:
+    name: Momentum V4 + Claude API + Email
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install anthropic yfinance pandas numpy
+
+      - name: Run scan cloud
+        env:
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_USER:         ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RECIPIENT_EMAIL:    ${{ secrets.RECIPIENT_EMAIL }}
+        run: |
+          python src/server_scan/scan_cloud.py
+
+      - name: Upload log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-error-log
+          path: "*.log"
+          retention-days: 7
