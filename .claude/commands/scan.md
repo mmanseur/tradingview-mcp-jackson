@@ -20,13 +20,14 @@ Si aucune position → analyser uniquement les setups de la watchlist.
 Pour chaque position (et les tickers watchlist sans position) :
 
 1. `chart_set_symbol` → switcher sur le ticker
-2. Attendre 2 secondes
-3. `chart_set_timeframe("D")` → Daily
-4. `data_get_study_values` → lire BRK, PB, ADD, EXIT, SELL, WEAK, EMA Fast/Mid/Slow, Donchian Hi/Lo, Chandelier, ADX, IsGoldPro
-5. `quote_get` → prix actuel, volume
-6. `data_get_ohlcv(summary=true)` → contexte 60 barres
-7. `chart_set_timeframe("240")` → 4h
-8. `data_get_study_values` → mêmes champs sur 4h
+2. `chart_set_timeframe("D")` → Daily
+3. `chart_get_state` → récupérer les entity IDs des indicateurs actifs
+4. `data_get_study_values(study_filter="Momentum")` → BRK, PB, ADD, EXIT, SELL, WEAK, EMA Fast/Mid/Slow (V4)
+   - Pour WPM/AEM : `data_get_study_values(study_filter="Gold")` → Donchian Hi/Lo, Chandelier, ADX, IsGoldPro
+5. `data_get_ohlcv(summary=true)` → prix actuel, OHLC, volume, dernières barres
+6. `chart_set_timeframe("240")` → 4h
+7. `data_get_study_values(study_filter="Momentum")` → mêmes champs sur 4h
+   - Pour WPM/AEM : `data_get_study_values(study_filter="Gold")` sur 4h
 
 Watchlist à couvrir si pas de position IBKR :
 - BBD.B.TO, WPM.TO, CLS.TO, AEM.TO, CGG.TO, VNP.TO, SHOP.TO
@@ -59,45 +60,58 @@ Calcule pour chaque recommandation d'entrée ou d'ajout :
 - Quelle est LA priorité numéro 1 aujourd'hui ?
 - Y a-t-il des actions contradictoires (acheter X, vendre Y) qui s'annulent ?
 
-## Étape 4 — Rapport structuré
+## Étape 4 — Envoi par email (pas de fichier permanent)
 
-Génère ce rapport markdown et sauvegarde-le dans `reports/scan_YYYY-MM-DD.md` via Bash :
+Génère le rapport markdown suivant (en mémoire) :
 
 ```
 # Analyse IA Portefeuille — [DATE]
 
 ## Résumé Exécutif
-[2-3 phrases : état global du portefeuille, signal dominant, action principale du jour]
+[2-3 phrases : état global, signal dominant, priorité du jour]
 
-## Positions IBKR — Recommandations
+## Positions IBKR
 
-### [TICKER] — [ACTION] 🔴/🟡/🟢
-- **Prix actuel** : X.XX $ | **Prix moyen** : X.XX $ | **P&L** : +X.X%
-- **Signal Daily** : BRK/PB/EXIT/HOLD | **Signal 4h** : ...
-- **Variante** : Momentum V4 / Gold Pro
-- **Recommandation** : [action concrète]
-- **Stop loss** : X.XX $ (−X% | risque X$ pour N actions)
-- **Target 1** : X.XX $ | **Target 2** : X.XX $
-- **Sizing** : Si entrée/ajout → N actions × X.XX$ = XXX$ (X% du capital)
-- **Raisonnement** : [2-3 phrases expliquant POURQUOI, pas juste quoi]
+### [TICKER] — [HOLD/AJOUTER/VENDRE] 🔴/🟡/🟢
+- Prix : X.XX$ | Moy : X.XX$ | P&L : +X.X%
+- Signal D/4h : BRK|PB|EXIT|HOLD | Variante : V4/GoldPro
+- Recommandation : [action] | Stop : X.XX$ | Target : X.XX$
+- Sizing : N actions × X.XX$ = XXX$ (X% capital) — risque X$/270$ max
+- Pourquoi : [2 phrases]
 
-## Setups Watchlist (sans position)
-[Tickers avec setup BRK/PB actif — plan d'entrée complet avec sizing]
+## Watchlist — Setups actifs
+[Tickers avec BRK/PB — entrée + sizing complet]
 
-## Analyse Portfolio Global
-- **Capital estimé investi** : X XXX $ / 9 000 $ (X%)
-- **Cash disponible** : ~X XXX $
-- **Risque concentré** : [alertes corrélations]
-- **Priorité #1 aujourd'hui** : [UNE action concrète]
+## Portfolio Global
+- Investi : X XXX$ / 9 000$ | Cash : ~X XXX$ | Corrélations : [alertes]
+- Priorité #1 : [UNE action]
 
-## Risques à surveiller
-[2-3 points macro ou techniques spécifiques à ta situation]
+## Risques
+[2-3 points concrets]
 ```
 
-Après avoir sauvegardé le rapport, fais un commit git :
+Ensuite, écris le rapport dans un fichier temporaire, envoie-le par email, puis supprime le fichier :
 ```bash
-cd D:/Claude/tradingview-mcp-jackson && git add reports/ && git commit -m "scan IA $(date +%Y-%m-%d) — analyse portefeuille"
+# Déterminer sujet et preview selon le contenu
+DATE=$(date +%Y-%m-%d)
+TMPFILE="D:/Claude/tradingview-mcp-jackson/reports/.tmp_scan_${DATE}.md"
+
+# Écrire le contenu dans le fichier temporaire (remplacer [CONTENT] par le markdown généré)
+cat > "$TMPFILE" << 'ENDDOC'
+[CONTENU DU RAPPORT ICI]
+ENDDOC
+
+# Envoyer par email
+node D:/Claude/tradingview-mcp-jackson/src/scripts/mail_report.js \
+  "[Scan IA] ${DATE} — portefeuille IBKR" \
+  "Analyse IA quotidienne — positions IBKR + setups TSX" \
+  "$TMPFILE"
+
+# Supprimer le fichier temporaire
+rm "$TMPFILE"
 ```
+
+Ne pas créer de rapport permanent. Ne pas faire de commit git.
 
 ## Règles importantes
 - Ne jamais inventer des prix — lire uniquement les données MCP
