@@ -4,60 +4,118 @@ description: Analyse IA complète du portefeuille IBKR — raisonnement multi-co
 
 Tu es un analyste quantitatif senior spécialisé swing trading TSX. Capital total : ~9 000 CAD, objectif +50%/an, courtier IBKR.
 
-## Étape 1 — Lire les positions IBKR réelles
+## Budget d'appels MCP — règle de performance
 
-Ouvre le panneau trading et lis les positions ouvertes :
+| Chemin | Appels | Condition |
+|---|---|---|
+| Lecture IBKR | 1 | Toujours |
+| Position IBKR | 7 | Analyse complète obligatoire |
+| Watchlist — signal actif | 7 | BRK/PB/ADD/SELL/WEAK ≥ 1 sur Daily |
+| Watchlist — aucun signal | **3** | **STOP après study_values Daily** |
+
+**Objectif ≤ 37 appels** pour 3 positions + 7 watchlist (économie ~30% vs scan naïf).
+
+---
+
+## Étape 1 — Lire les positions IBKR réelles (1 appel)
+
 ```
 ui_open_panel("trading")
 ```
 
 Note pour chaque position : ticker, quantité, prix moyen, P&L latent, valeur de marché.
 
-Si aucune position → analyser uniquement les setups de la watchlist.
+Si aucune position → analyser uniquement la watchlist.
 
-## Étape 2 — Collecter les données techniques par position
+---
 
-Pour chaque position (et les tickers watchlist sans position) :
+## Étape 2 — Scan par ticker
 
-1. `chart_set_symbol` → switcher sur le ticker
-2. Attendre 2 secondes
-3. `chart_set_timeframe("D")` → Daily
-4. `data_get_study_values` → lire BRK, PB, ADD, EXIT, SELL, WEAK, EMA Fast/Mid/Slow, Donchian Hi/Lo, Chandelier, ADX, IsGoldPro
-5. `quote_get` → prix actuel, volume
-6. `data_get_ohlcv(summary=true)` → contexte 60 barres
-7. `chart_set_timeframe("240")` → 4h
-8. `data_get_study_values` → mêmes champs sur 4h
+### Ordre de traitement
+1. Positions IBKR en premier (toujours analyse complète)
+2. Watchlist ensuite (analyse conditionnelle)
 
-Watchlist à couvrir si pas de position IBKR :
-- BBD-B.TO, WPM.TO, CLS.TO, AEM.TO, CGG.TO, VNP.TO, SHOP.TO
+### Protocole A — POSITION IBKR (7 appels, sans attente)
+
+```
+1. chart_set_symbol(ticker)
+2. chart_set_timeframe("D")
+3. data_get_study_values          ← Signal Daily + EMAs
+4. quote_get                      ← Prix temps réel
+5. data_get_ohlcv(summary=true, count=60)
+6. chart_set_timeframe("240")
+7. data_get_study_values          ← Signal 4h
+```
+
+### Protocole B — WATCHLIST avec early-exit
+
+**Phase 1 — Décision rapide (3 appels)**
+
+```
+1. chart_set_symbol(ticker)
+2. chart_set_timeframe("D")
+3. data_get_study_values          ← Signal Daily
+```
+
+**→ Évaluer immédiatement :**
+
+- Si `BRK=0` ET `PB=0` ET `ADD=0` ET `SELL=0` ET `WEAK=0` :
+  → **STOP. Enregistrer comme WATCH. Passer au ticker suivant.**
+  → Ne pas appeler quote_get, ohlcv, ni la 4h.
+
+- Si au moins un signal actif (BRK/PB/ADD/SELL/WEAK ≥ 1) :
+  → Continuer avec les 4 appels suivants.
+
+**Phase 2 — Analyse complète (4 appels supplémentaires)**
+
+```
+4. quote_get
+5. data_get_ohlcv(summary=true, count=60)
+6. chart_set_timeframe("240")
+7. data_get_study_values          ← Signal 4h
+```
+
+### Champs à lire par variante
+
+**Momentum V4** (BBD-B, VNP, CLS, SHOP) :
+BRK, PB, ADD, EXIT, SELL, WEAK, EMA Fast/Mid/Slow, Extension%
+
+**Gold Pro** (WPM, AEM, CGG) :
+BRK, PB, ADD, EXIT, Donchian Hi/Lo, Chandelier, ADX, IsGoldPro
+
+### Watchlist à couvrir si aucune position active
+BBD-B.TO, WPM.TO, CLS.TO, AEM.TO, CGG.TO, VNP.TO, SHOP.TO
+
+---
 
 ## Étape 3 — Raisonnement IA multi-couches
 
-Pour chaque position/ticker, raisonne sur **4 couches** :
+Pour chaque position/ticker avec données complètes, raisonne sur **4 couches** :
 
 ### Couche 1 — Signal technique brut
 - Quel signal domine : BRK / PB / ADD / EXIT / SELL / WEAK / neutre ?
 - Alignement EMAs Daily et 4h concordants ou divergents ?
-- Pour Gold Pro (WPM/AEM) : Donchian 55j + Chandelier trailing + ADX
+- Pour Gold Pro (WPM/AEM/CGG) : Donchian 55j + Chandelier trailing + ADX
 
 ### Couche 2 — Contexte de la position (si position ouverte)
 - P&L latent : +X% → proche du target ? Protéger avec stop trail ?
 - Prix actuel vs prix moyen : extension ou retour à la moyenne ?
-- Durée de la position (si connue) : combien de temps en position ?
 
 ### Couche 3 — Sizing et risque concret
 Calcule pour chaque recommandation d'entrée ou d'ajout :
-- Stop loss en $ par action (prix - stop)
+- Stop loss en $ par action (prix − stop)
 - Risque total acceptable : 3% de 9 000 CAD = 270 CAD max
-- Nombre d'actions exact = 270 / (prix - stop)
+- Nombre d'actions exact = 270 / (prix − stop)
 - Valeur totale de la position proposée
 - Concentration : cette position représente X% du portefeuille
 
 ### Couche 4 — Synthèse portfolio global
 - Corrélations : plusieurs positions gold (WPM/AEM/CGG) = risque concentré ?
-- Cash disponible estimé : 9 000 CAD - valeur des positions ouvertes
+- Cash disponible estimé : 9 000 CAD − valeur des positions ouvertes
 - Quelle est LA priorité numéro 1 aujourd'hui ?
 - Y a-t-il des actions contradictoires (acheter X, vendre Y) qui s'annulent ?
+
+---
 
 ## Étape 4 — Rapport structuré
 
@@ -82,7 +140,8 @@ Génère ce rapport markdown et sauvegarde-le dans `reports/scan_YYYY-MM-DD.md` 
 - **Raisonnement** : [2-3 phrases expliquant POURQUOI, pas juste quoi]
 
 ## Setups Watchlist (sans position)
-[Tickers avec setup BRK/PB actif — plan d'entrée complet avec sizing]
+[Tickers avec signal BRK/PB actif — plan d'entrée complet avec sizing]
+[Tickers WATCH sans signal — une ligne chacun]
 
 ## Analyse Portfolio Global
 - **Capital estimé investi** : X XXX $ / 9 000 $ (X%)
@@ -96,8 +155,10 @@ Génère ce rapport markdown et sauvegarde-le dans `reports/scan_YYYY-MM-DD.md` 
 
 Après avoir sauvegardé le rapport, fais un commit git :
 ```bash
-cd D:/Claude/tradingview-mcp-jackson && git add reports/ && git commit -m "scan IA $(date +%Y-%m-%d) — analyse portefeuille"
+cd /home/user/tradingview-mcp-jackson && git add reports/ && git commit -m "scan IA $(date +%Y-%m-%d) — analyse portefeuille"
 ```
+
+---
 
 ## Règles importantes
 - Ne jamais inventer des prix — lire uniquement les données MCP
@@ -105,3 +166,4 @@ cd D:/Claude/tradingview-mcp-jackson && git add reports/ && git commit -m "scan 
 - Le sizing doit TOUJOURS être calculé (pas juste "acheter")
 - Expliquer le POURQUOI de chaque recommandation, pas juste le QUOI
 - Si signal Daily et 4h contradictoires → signaler le conflit et attendre confirmation
+- **Ne jamais appeler `data_get_ohlcv` ou `chart_set_timeframe("240")` pour un ticker watchlist sans signal Daily actif**
