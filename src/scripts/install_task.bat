@@ -7,13 +7,13 @@ schtasks /create ^
   /tr "D:\Claude\tradingview-mcp-jackson\src\scripts\run_scanner.bat" ^
   /sc weekly ^
   /d MON,TUE,WED,THU,FRI ^
-  /st 08:30 ^
+  /st 09:00 ^
   /f
 
 if %ERRORLEVEL% EQU 0 (
     echo.
     echo [OK] Tache "ClaudeScannerV4" creee avec succes.
-    echo      Prochaine execution: prochain jour ouvrable a 08:30
+    echo      Prochaine execution: prochain jour ouvrable a 09:00
     echo.
     schtasks /query /tn "ClaudeScannerV4" /fo LIST
 ) else (

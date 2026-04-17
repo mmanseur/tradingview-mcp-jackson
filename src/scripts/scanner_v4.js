@@ -12,7 +12,7 @@
  *   - Indicateurs "Momentum V4" ET "Gold Momentum Pro" présents sur le chart
  *
  * Exécution: node src/scripts/scanner_v4.js
- * Cron 8h30 lun-ven via Windows Task Scheduler (ClaudeScannerV4)
+ * Cron 9h00 lun-ven via Windows Task Scheduler (ClaudeScannerV4)
  */
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
