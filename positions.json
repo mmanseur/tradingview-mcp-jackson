@@ -1,0 +1,48 @@
+{
+  "exported_at": "2026-04-17T21:32:31.321070+00:00",
+  "account_id": "U22347486",
+  "account": {
+    "AvailableFunds": 106.97,
+    "ExcessLiquidity": 106.97,
+    "NetLiquidation": 8019.61,
+    "TotalCashValue": 106.97
+  },
+  "positions": [
+    {
+      "ticker": "WPM",
+      "qty": 15,
+      "avg_price": 202.5074,
+      "last_price": 208.71,
+      "pnl_pct": 3.06,
+      "pnl_cad": 93.04,
+      "value_cad": 3130.65
+    },
+    {
+      "ticker": "BBD.B",
+      "qty": 11,
+      "avg_price": 257.9588,
+      "last_price": 267.0,
+      "pnl_pct": 3.5,
+      "pnl_cad": 99.45,
+      "value_cad": 2937.0
+    },
+    {
+      "ticker": "VNP",
+      "qty": 46,
+      "avg_price": 34.3517,
+      "last_price": 33.57,
+      "pnl_pct": -2.28,
+      "pnl_cad": -35.96,
+      "value_cad": 1544.22
+    },
+    {
+      "ticker": "CGG",
+      "qty": 9,
+      "avg_price": 26.131,
+      "last_price": 34.04,
+      "pnl_pct": 30.27,
+      "pnl_cad": 71.18,
+      "value_cad": 306.36
+    }
+  ]
+}
