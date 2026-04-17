@@ -34,10 +34,10 @@ Si aucune position → analyser uniquement la watchlist.
 ## Étape 2 — Scan par ticker
 
 ### Ordre de traitement
-1. Positions IBKR en premier (toujours analyse complète)
+1. Positions ouvertes en premier (toujours analyse complète)
 2. Watchlist ensuite (analyse conditionnelle)
 
-### Protocole A — POSITION IBKR (7 appels, sans attente)
+### Protocole A — POSITION OUVERTE (7 appels, sans attente)
 
 ```
 1. chart_set_symbol(ticker)
@@ -129,7 +129,7 @@ Génère ce rapport markdown et sauvegarde-le dans `reports/scan_YYYY-MM-DD.md` 
 ## Résumé Exécutif
 [2-3 phrases : état global du portefeuille, signal dominant, action principale du jour]
 
-## Positions IBKR — Recommandations
+## Positions ouvertes — Recommandations
 
 ### [TICKER] — [ACTION] 🔴/🟡/🟢
 - **Prix actuel** : X.XX $ | **Prix moyen** : X.XX $ | **P&L** : +X.X%
@@ -157,7 +157,7 @@ Génère ce rapport markdown et sauvegarde-le dans `reports/scan_YYYY-MM-DD.md` 
 
 Après avoir sauvegardé le rapport, fais un commit git :
 ```bash
-cd /home/user/tradingview-mcp-jackson && git add reports/ && git commit -m "scan IA $(date +%Y-%m-%d) — analyse portefeuille"
+cd d:/Claude/tradingview-mcp-jackson && git add reports/ && git commit -m "scan IA $(date +%Y-%m-%d) — analyse portefeuille"
 ```
 
 ---
