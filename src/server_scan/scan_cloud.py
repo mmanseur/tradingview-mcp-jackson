@@ -57,7 +57,7 @@ def fetch_ohlcv(ticker: str, bars: int = OHLCV_BARS):
     yahoo_sym = YAHOO_MAP.get(ticker.upper(), f"{ticker}.TO")
     print(f"  yfinance {yahoo_sym}...")
     df = yf.download(yahoo_sym, period="2y", interval="1d",
-                     progress=False, auto_adjust=True)
+                     progress=False, auto_adjust=True, multi_level_index=False)
     if df.empty:
         raise ValueError(f"Aucune donnée yfinance pour {yahoo_sym}")
     df.columns = [c.lower() for c in df.columns]
