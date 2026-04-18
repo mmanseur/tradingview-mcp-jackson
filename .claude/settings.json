@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api:*)",
+      "Bash(python -c ':*)",
+      "Bash(python src/server_scan/export_positions.py)",
+      "Bash(pip show:*)",
+      "Bash(python -m pip install anthropic yfinance)",
+      "Bash(python -c \"import anthropic, yfinance; print\\('anthropic', anthropic.__version__\\); print\\('yfinance OK'\\)\")"
+    ]
+  }
+}
