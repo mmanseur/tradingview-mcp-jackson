@@ -5,6 +5,8 @@ on:
     branches: [trading_routine]
     paths:
       - positions.json        # se déclenche UNIQUEMENT si ce fichier change
+  schedule:
+    - cron: "30 13 * * 1-5"
 
 jobs:
   scan:
@@ -27,14 +29,24 @@ jobs:
         run: |
           pip install -r src/server_scan/requirements.txt
 
-      - name: Run scan cloud
+      - name: Run scan cloud (with retry)
         env:
           ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
           GMAIL_USER:         ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           RECIPIENT_EMAIL:    ${{ secrets.RECIPIENT_EMAIL }}
         run: |
-          python src/server_scan/scan_cloud.py
+          for i in 1 2 3; do
+            echo "Attempt $i..."
+            python src/server_scan/scan_cloud.py && break
+            echo "Failed attempt $i"
+            sleep 5
+          done
+      
+          if [ $i -eq 3 ]; then
+            echo "All retries failed"
+            exit 1
+          fi
 
       - name: Upload log on failure
         if: failure()
