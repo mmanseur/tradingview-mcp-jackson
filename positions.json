@@ -1,5 +1,5 @@
 {
-  "exported_at": "2026-04-18T01:45:31.746690+00:00",
+  "exported_at": "2026-04-18T12:32:27.812302+00:00",
   "account_id": "U22347486",
   "account": {
     "AvailableFunds": 106.97,
@@ -11,7 +11,7 @@
     {
       "ticker": "WPM",
       "qty": 15,
-      "avg_price": 202.5074,
+      "avg_price": 201.0509,
       "last_price": NaN,
       "pnl_pct": NaN,
       "pnl_cad": NaN,
@@ -21,28 +21,28 @@
       "ticker": "BBD.B",
       "qty": 11,
       "avg_price": 257.9588,
-      "last_price": 267.0,
-      "pnl_pct": 3.5,
-      "pnl_cad": 99.45,
-      "value_cad": 2937.0
+      "last_price": NaN,
+      "pnl_pct": NaN,
+      "pnl_cad": NaN,
+      "value_cad": NaN
     },
     {
       "ticker": "VNP",
       "qty": 46,
       "avg_price": 34.3517,
-      "last_price": 33.57,
-      "pnl_pct": -2.28,
-      "pnl_cad": -35.96,
-      "value_cad": 1544.22
+      "last_price": NaN,
+      "pnl_pct": NaN,
+      "pnl_cad": NaN,
+      "value_cad": NaN
     },
     {
       "ticker": "CGG",
       "qty": 9,
-      "avg_price": 26.131,
-      "last_price": 34.04,
-      "pnl_pct": 30.27,
-      "pnl_cad": 71.18,
-      "value_cad": 306.36
+      "avg_price": 27.0443,
+      "last_price": NaN,
+      "pnl_pct": NaN,
+      "pnl_cad": NaN,
+      "value_cad": NaN
     }
   ]
 }
