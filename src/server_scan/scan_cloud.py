@@ -134,13 +134,17 @@ Règles :
 - Raisonnement basé UNIQUEMENT sur les données fournies, ne pas inventer de prix
 """
 
-    message = client.messages.create(
-        model="claude-opus-4-6",
+    chunks = []
+    with client.messages.stream(
+        model="claude-sonnet-4-6",
         max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    return message.content[0].text
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for text in stream.text_stream:
+            chunks.append(text)
+            print(text, end="", flush=True)
+    print()
+    return "".join(chunks)
 
 
 # ─── EMAIL ──────────────────────────────────────────────────────────────────
