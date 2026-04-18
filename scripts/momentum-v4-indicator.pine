@@ -1,16 +1,20 @@
 //@version=6
-indicator("Momentum V4 [BBD-B Backtest]", overlay=true, max_labels_count=300)
+indicator("Momentum V4 [Unified]", overlay=true, max_labels_count=300)
 
 // ============================================================
 // Unified Momentum Indicator — auto-switches logic per ticker
-//   • WPM / AEM  → Gold Momentum Pro (Donchian turtle, 13/26/55)
-//   • All others → Momentum V4       (EMA cross,       8/21/50)
+//   • WPM / AEM        → Gold Momentum Pro (Donchian turtle, 13/26/55)
+//   • BBD-B / CLS      → Supertrend        (ATR x3, period 10)
+//   • All others       → Momentum V4       (EMA cross, 8/21/50)
+//
 // Scanner reads: EMA Fast/Mid/Slow, BRK, PB, ADD, EXIT, SELL,
-//                WEAK, Donchian Hi/Lo, Chandelier, ADX, Pyramid Count, IsGoldPro
+//   WEAK, Donchian Hi/Lo, Chandelier, ADX, Pyramid Count,
+//   IsGoldPro, IsSupertrend, Supertrend Level
 // ============================================================
 
-// ─── AUTO-DETECT GOLD TICKER ────────────────────────────────
-isGoldTicker = str.contains(syminfo.ticker, "WPM") or str.contains(syminfo.ticker, "AEM")
+// ─── AUTO-DETECT TICKER MODE ────────────────────────────────
+isGoldTicker       = str.contains(syminfo.ticker, "WPM") or str.contains(syminfo.ticker, "AEM")
+isSupertrendTicker = str.contains(syminfo.ticker, "BBD") or str.contains(syminfo.ticker, "CLS")
 
 // ─── EMA LENGTHS ────────────────────────────────────────────
 f = isGoldTicker ? 13 : 8
@@ -52,14 +56,14 @@ adxLen      = 14
 [_dp, _dm, adx] = ta.dmi(adxLen, adxLen)
 adxOk       = adx > 20.0
 
-entryHigh = ta.highest(high[1], 55)
-addHigh   = ta.highest(high[1], 20)
-exitLow   = ta.lowest(low[1],   20)
+entryHigh  = ta.highest(high[1], 55)
+addHigh    = ta.highest(high[1], 20)
+exitLow    = ta.lowest(low[1],   20)
 chandelier = ta.highest(high, 22) - atr14 * 4.5
 
-var bool  gp_inPos = false
-var int   gp_entryBar = 0
-var int   gp_adds  = 0
+var bool gp_inPos    = false
+var int  gp_entryBar = 0
+var int  gp_adds     = 0
 
 gp_brk = close > entryHigh and bull_align and adxOk and not gp_inPos
 gp_pb  = close > emaFast and low < emaFast and close > entryHigh[5] and bull_align and adxOk and not gp_brk and not gp_inPos
@@ -69,7 +73,7 @@ if (gp_brk or gp_pb) and not gp_inPos
     gp_entryBar := bar_index
     gp_adds     := 0
 
-gp_add  = gp_inPos and close > addHigh and adxOk and gp_adds < 2 and bar_index - gp_entryBar >= 10
+gp_add = gp_inPos and close > addHigh and adxOk and gp_adds < 2 and bar_index - gp_entryBar >= 10
 if gp_add
     gp_adds += 1
 
@@ -80,32 +84,60 @@ if gp_exit
 
 gp_weak = gp_inPos and close < emaFast and not gp_exit
 
+// ─── SUPERTREND SIGNALS ──────────────────────────────────────
+st_atr        = ta.atr(10)
+st_hl2        = (high + low) / 2
+st_basicUpper = st_hl2 + 3.0 * st_atr
+st_basicLower = st_hl2 - 3.0 * st_atr
+
+var float st_upperBand = na
+var float st_lowerBand = na
+var int   st_trend     = 1
+
+st_upperBand := (na(st_upperBand[1]) or st_basicUpper < st_upperBand[1] or close[1] > st_upperBand[1]) ? st_basicUpper : st_upperBand[1]
+st_lowerBand := (na(st_lowerBand[1]) or st_basicLower > st_lowerBand[1] or close[1] < st_lowerBand[1]) ? st_basicLower : st_lowerBand[1]
+st_trend     := (st_trend[1] == -1 and close > st_upperBand[1]) ? 1 : (st_trend[1] == 1 and close < st_lowerBand[1]) ? -1 : st_trend[1]
+
+st_line    = st_trend == 1 ? st_lowerBand : st_upperBand
+st_bull    = st_trend == 1
+st_crossUp = st_trend == 1 and st_trend[1] == -1
+st_crossDn = st_trend == -1 and st_trend[1] == 1
+
+st_brk  = st_crossUp
+st_pb   = st_bull and low <= st_lowerBand * 1.005 and close > st_lowerBand and not st_brk
+st_exit = st_crossDn
+st_weak = st_bull and close < (st_lowerBand + (st_upperBand - st_lowerBand) * 0.3) and not st_exit
+
 // ─── SELECT ACTIVE SIGNALS ───────────────────────────────────
-sig_brk  = isGoldTicker ? gp_brk  : v4_brk
-sig_pb   = isGoldTicker ? gp_pb   : v4_pb
+sig_brk  = isGoldTicker ? gp_brk  : isSupertrendTicker ? st_brk  : v4_brk
+sig_pb   = isGoldTicker ? gp_pb   : isSupertrendTicker ? st_pb   : v4_pb
 sig_add  = isGoldTicker ? gp_add  : false
-sig_exit = isGoldTicker ? gp_exit : false
-sig_sell = isGoldTicker ? false   : v4_sell
-sig_weak = isGoldTicker ? gp_weak : v4_weak
+sig_exit = isGoldTicker ? gp_exit : isSupertrendTicker ? st_exit  : false
+sig_sell = isGoldTicker ? false   : isSupertrendTicker ? false    : v4_sell
+sig_weak = isGoldTicker ? gp_weak : isSupertrendTicker ? st_weak  : v4_weak
 
 // ─── PLOTS (overlay) ─────────────────────────────────────────
-plot(emaFast,                      title="EMA Fast",    color=color.new(color.lime,   0), linewidth=1)
-plot(emaMid,                       title="EMA Mid",     color=color.new(color.orange, 0), linewidth=1)
-plot(emaSlow,                      title="EMA Slow",    color=color.new(color.red,    0), linewidth=2)
-plot(isGoldTicker ? entryHigh : na, title="Donchian Hi", color=color.new(color.green, 0))
-plot(isGoldTicker ? exitLow   : na, title="Donchian Lo", color=color.new(color.red,   0))
-plot(isGoldTicker ? chandelier: na, title="Chandelier",  color=color.new(color.aqua,  0), style=plot.style_linebr)
+plot(emaFast,                          title="EMA Fast",     color=color.new(color.lime,   0), linewidth=1)
+plot(emaMid,                           title="EMA Mid",      color=color.new(color.orange, 0), linewidth=1)
+plot(emaSlow,                          title="EMA Slow",     color=color.new(color.red,    0), linewidth=2)
+plot(isGoldTicker ? entryHigh : na,    title="Donchian Hi",  color=color.new(color.green,  0))
+plot(isGoldTicker ? exitLow   : na,    title="Donchian Lo",  color=color.new(color.red,    0))
+plot(isGoldTicker ? chandelier : na,   title="Chandelier",   color=color.new(color.aqua,   0), style=plot.style_linebr)
+st_color = st_bull ? color.new(color.green, 0) : color.new(color.red, 0)
+plot(isSupertrendTicker ? st_line : na, title="Supertrend",  color=st_color, linewidth=2, style=plot.style_linebr)
 
 // ─── DATA WINDOW OUTPUTS ─────────────────────────────────────
-plot(adx,                          title="ADX",           display=display.data_window)
-plot(sig_brk  ? 1 : 0,            title="BRK",           display=display.data_window)
-plot(sig_pb   ? 1 : 0,            title="PB",            display=display.data_window)
-plot(sig_add  ? 1 : 0,            title="ADD",           display=display.data_window)
-plot(sig_exit ? 1 : 0,            title="EXIT",          display=display.data_window)
-plot(sig_sell ? 1 : 0,            title="SELL",          display=display.data_window)
-plot(sig_weak ? 1 : 0,            title="WEAK",          display=display.data_window)
-plot(isGoldTicker ? gp_adds : 0,  title="Pyramid Count", display=display.data_window)
-plot(isGoldTicker ? 1 : 0,        title="IsGoldPro",     display=display.data_window)
+plot(adx,                              title="ADX",              display=display.data_window)
+plot(sig_brk  ? 1 : 0,                title="BRK",              display=display.data_window)
+plot(sig_pb   ? 1 : 0,                title="PB",               display=display.data_window)
+plot(sig_add  ? 1 : 0,                title="ADD",              display=display.data_window)
+plot(sig_exit ? 1 : 0,                title="EXIT",             display=display.data_window)
+plot(sig_sell ? 1 : 0,                title="SELL",             display=display.data_window)
+plot(sig_weak ? 1 : 0,                title="WEAK",             display=display.data_window)
+plot(isGoldTicker ? gp_adds : 0,      title="Pyramid Count",    display=display.data_window)
+plot(isGoldTicker ? 1 : 0,            title="IsGoldPro",        display=display.data_window)
+plot(isSupertrendTicker ? 1 : 0,      title="IsSupertrend",     display=display.data_window)
+plot(isSupertrendTicker ? st_line : na, title="Supertrend Level", display=display.data_window)
 
 // ─── SIGNAL LABELS ───────────────────────────────────────────
 if sig_brk
@@ -116,15 +148,17 @@ if sig_add
     label.new(bar_index, high, "ADD", style=label.style_label_down, color=color.blue, textcolor=color.white, size=size.small)
 if sig_exit
     label.new(bar_index, high, "EXIT", style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
-if sig_sell and not isGoldTicker
+if sig_sell
     label.new(bar_index, high + atr14 * 0.5, "SELL", style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
 
 // ─── BACKGROUND ──────────────────────────────────────────────
-bgcolor(bull_align ? color.new(color.green, 92) : bear_align ? color.new(color.red, 92) : na)
+bg_st   = st_bull ? color.new(color.green, 92) : color.new(color.red, 92)
+bg_std  = bull_align ? color.new(color.green, 92) : bear_align ? color.new(color.red, 92) : color(na)
+bgcolor(isSupertrendTicker ? bg_st : bg_std)
 
 // ─── ALERTS ──────────────────────────────────────────────────
 alertcondition(sig_brk,  title="BRK",  message="Momentum: BREAKOUT on {{ticker}}")
 alertcondition(sig_pb,   title="PB",   message="Momentum: PULLBACK on {{ticker}}")
 alertcondition(sig_add,  title="ADD",  message="Gold Pro: ADD on {{ticker}}")
-alertcondition(sig_exit, title="EXIT", message="Gold Pro: EXIT on {{ticker}}")
+alertcondition(sig_exit, title="EXIT", message="EXIT signal on {{ticker}}")
 alertcondition(sig_sell, title="SELL", message="Momentum V4: SELL on {{ticker}}")

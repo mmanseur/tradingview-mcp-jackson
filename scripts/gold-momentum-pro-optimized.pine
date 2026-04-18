@@ -1,0 +1,160 @@
+//@version=6
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║     GOLD MOMENTUM PRO — OPTIMIZED  [Donchian Turtle | TSX Gold]            ║
+// ║  Tickers cibles : WPM.TO · AEM.TO                                           ║
+// ╠══════════════════════════════════════════════════════════════════════════════╣
+// ║  OPTIMISATION vs BASELINE                                                   ║
+// ║  Baseline WPM : +122.94% | 72 trades | MaxDD 36.80%                        ║
+// ║  Baseline AEM : -74.14%  | 8 trades  | MaxDD 93.49%                        ║
+// ║                                                                              ║
+// ║  CHANGEMENTS OPTIMISÉS                                                      ║
+// ║  exitLookback  20→15 : sortie Donchian plus rapide (-25% latence)           ║
+// ║  chandelierMult 4.5→4.0 : trailing stop plus serré, protège profits         ║
+// ║  adxThreshold  20→22 : filtre les marchés latéraux plus efficacement        ║
+// ║  maxAdds        2→1  : pyramiding réduit → limite drawdown significativement║
+// ║                                                                              ║
+// ║  NOTE: compare_strategies indique que Supertrend surperforme sur WPM/AEM   ║
+// ║  en window 3 ans. Gold Pro reste pertinent sur tendances longues (5+ ans). ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+strategy("Gold Momentum Pro — Optimized [TSX Gold]",
+     overlay                 = true,
+     pyramiding              = 1,
+     initial_capital         = 10000,
+     default_qty_type        = strategy.percent_of_equity,
+     default_qty_value       = 33,
+     commission_type         = strategy.commission.cash_per_order,
+     commission_value        = 1,
+     slippage                = 2,
+     process_orders_on_close = true,
+     calc_on_every_tick      = false)
+
+// ─── INPUTS ───────────────────────────────────────────────────────────────────
+grpEMA  = "EMA Trend Filter"
+grpDon  = "Donchian Turtle"
+grpRisk = "Risk / Chandelier Stop"
+grpADX  = "ADX Trend Filter"
+grpDisp = "Display"
+
+emaFastLen    = input.int  (13,   "EMA Fast",                       minval=2,   maxval=30,  group=grpEMA)
+emaMidLen     = input.int  (26,   "EMA Mid",                        minval=5,   maxval=60,  group=grpEMA)
+emaSlowLen    = input.int  (55,   "EMA Slow",                       minval=10,  maxval=200, group=grpEMA)
+
+entryLookback = input.int  (55,   "Entry Breakout Lookback (55d)",  minval=20,  maxval=100, group=grpDon)
+addLookback   = input.int  (20,   "Add Position Lookback (20d)",    minval=5,   maxval=50,  group=grpDon)
+exitLookback  = input.int  (15,   "Exit Lookback - 15d optimized",  minval=5,   maxval=50,  group=grpDon)
+maxAdds       = input.int  (1,    "Max Pyramid Adds - 1 optimized", minval=0,   maxval=3,   group=grpDon)
+
+atrLen        = input.int  (14,   "ATR Length",                     minval=5,   maxval=30,  group=grpRisk)
+chandelierLen = input.int  (22,   "Chandelier Lookback (22d)",      minval=5,   maxval=50,  group=grpRisk)
+chandelierMult= input.float(4.0,  "Chandelier Mult - 4.0 optimized",step=0.1,   minval=1.0, maxval=8.0, group=grpRisk)
+
+adxLen        = input.int  (14,   "ADX Length",                     minval=5,               group=grpADX)
+adxThreshold  = input.float(22.0, "ADX Threshold - 22 optimized",   step=1.0,               group=grpADX)
+useAdxFilter  = input.bool (true, "Use ADX Filter",                                          group=grpADX)
+
+showLabels    = input.bool (true, "Show Entry/Exit Labels",                                  group=grpDisp)
+
+// ─── CALCULATIONS ─────────────────────────────────────────────────────────────
+emaFast = ta.ema(close, emaFastLen)
+emaMid  = ta.ema(close, emaMidLen)
+emaSlow = ta.ema(close, emaSlowLen)
+atr     = ta.atr(atrLen)
+
+[diPlus, diMinus, adx] = ta.dmi(adxLen, adxLen)
+
+entryHigh = ta.highest(high[1], entryLookback)
+addHigh   = ta.highest(high[1], addLookback)
+exitLow   = ta.lowest (low[1],  exitLookback)
+chandelier = ta.highest(high, chandelierLen) - atr * chandelierMult
+
+alignedBull = emaFast > emaMid and emaMid > emaSlow
+
+// ─── SIGNALS ──────────────────────────────────────────────────────────────────
+adxOk       = not useAdxFilter or adx > adxThreshold
+isBreakout  = close > entryHigh and alignedBull and adxOk and strategy.position_size == 0
+isPullback  = strategy.position_size == 0 and
+              close > emaFast and low < emaFast and
+              close > entryHigh[5] and alignedBull and adxOk and not isBreakout
+isAdd       = strategy.position_size > 0 and close > addHigh and adxOk
+isExit      = strategy.position_size > 0 and close < exitLow
+isChandelier= strategy.position_size > 0 and close < chandelier and not isExit
+
+// ─── PYRAMIDING COUNTER ───────────────────────────────────────────────────────
+var int addsUsed = 0
+if strategy.position_size == 0 and strategy.position_size[1] > 0
+    addsUsed := 0
+if isAdd and addsUsed < maxAdds
+    addsUsed += 1
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+var float positionEntryPrice = na
+var float initialStop        = na
+
+// ─── ORDERS ───────────────────────────────────────────────────────────────────
+if isBreakout
+    positionEntryPrice := close
+    initialStop        := close - atr * 2.0
+    strategy.entry("Long", strategy.long, comment="BRK")
+    if showLabels
+        label.new(bar_index, low * 0.997, "BREAKOUT\n55d High",
+             style=label.style_label_up, color=color.new(color.green, 5),
+             textcolor=color.white, size=size.small)
+
+if isPullback
+    positionEntryPrice := close
+    initialStop        := close - atr * 2.0
+    strategy.entry("Long", strategy.long, comment="PB")
+    if showLabels
+        label.new(bar_index, low * 0.997, "PULLBACK\nEMA Touch",
+             style=label.style_label_up, color=color.new(color.teal, 5),
+             textcolor=color.white, size=size.small)
+
+if isAdd and addsUsed <= maxAdds and strategy.position_size > 0
+    strategy.entry("Add" + str.tostring(addsUsed), strategy.long, comment="ADD")
+    if showLabels
+        label.new(bar_index, low * 0.997, "ADD",
+             style=label.style_label_up, color=color.new(color.blue, 10),
+             textcolor=color.white, size=size.tiny)
+
+if isExit
+    strategy.close_all(comment="EXIT Donchian")
+    positionEntryPrice := na
+    initialStop        := na
+    if showLabels
+        label.new(bar_index, high * 1.002, "EXIT\nDonchian Low",
+             style=label.style_label_down, color=color.new(color.red, 5),
+             textcolor=color.white, size=size.small)
+
+if isChandelier
+    strategy.close_all(comment="CHANDELIER Stop")
+    positionEntryPrice := na
+    initialStop        := na
+    if showLabels
+        label.new(bar_index, high * 1.002, "CHANDELIER\nTrailing Stop",
+             style=label.style_label_down, color=color.new(color.orange, 5),
+             textcolor=color.white, size=size.small)
+
+// ─── PLOTS ────────────────────────────────────────────────────────────────────
+plot(emaFast,    "EMA Fast 13",       color=color.new(color.yellow, 30), linewidth=1)
+plot(emaMid,     "EMA Mid 26",        color=color.new(color.orange, 30), linewidth=1)
+plot(emaSlow,    "EMA Slow 55",       color=color.new(color.red,    20), linewidth=2)
+plot(entryHigh,  "Donchian Entry 55", color=color.new(color.green,   0), linewidth=1)
+plot(exitLow,    "Donchian Exit 15",  color=color.new(color.red,     0), linewidth=1)
+plot(chandelier, "Chandelier Stop",   color=color.new(color.aqua,    0), style=plot.style_linebr, linewidth=1)
+
+p_fast = plot(emaFast, display=display.none)
+p_slow = plot(emaSlow, display=display.none)
+fill(p_fast, p_slow,
+     color = alignedBull ? color.new(color.green, 90) : color.new(color.red, 90),
+     title = "EMA Trend Zone")
+
+// ─── DATA WINDOW ──────────────────────────────────────────────────────────────
+plot(isBreakout  ? 1 : 0, "Breakout Signal",  display=display.data_window)
+plot(isPullback  ? 1 : 0, "Pullback Signal",  display=display.data_window)
+plot(isAdd       ? 1 : 0, "Add Signal",       display=display.data_window)
+plot(isExit      ? 1 : 0, "Donchian Exit",    display=display.data_window)
+plot(isChandelier? 1 : 0, "Chandelier Exit",  display=display.data_window)
+plot(addsUsed,            "Pyramid Count",    display=display.data_window)
+plot(adx,                 "ADX Value",        display=display.data_window)
+plot(chandelier,          "Chandelier Level", display=display.data_window)

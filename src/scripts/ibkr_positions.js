@@ -50,8 +50,8 @@ export async function readIbkrPositions() {
 function parsePositionLine(line) {
   // Normalise whitespace
   const clean = line.replace(/\s+/g, ' ').replace(/\|/g, ' ').trim();
-  // Regex tolérante
-  const re = /^([A-Z0-9.]+)\s*@(\w+)\s+(Long|Short)\s+([\d,]+)\s+([\d,.]+)\s+([\d,.]+)\s+([−+\-]?[\d.]+%)\s+([−+\-]?[\d,.]+)\s+CAD\s+([−+\-]?[\d,.]+)\s+CAD\s+(\d+)/i;
+  // Regex tolérante — Change% absent du DOM, deux valeurs CAD (unrealized + realized/daily)
+  const re = /^([A-Z0-9.]+)\s*@(\w+)\s+(Long|Short)\s+([\d,]+)\s+([\d,.]+)\s+([\d,.]+)\s+(?:[−+\-]?[\d.]+%\s+)?([−+\-]?[\d,.]+)\s+CAD\s+([−+\-]?[\d,.]+)\s+CAD\s+(\d+)/i;
   const m = clean.match(re);
   if (!m) return null;
 
@@ -63,10 +63,10 @@ function parsePositionLine(line) {
     qty: toNum(m[4]),
     avgPrice: toNum(m[5]),
     lastPrice: toNum(m[6]),
-    changePct: m[7].replace('−', '-'),
-    unrealizedPnl: toNum(m[8]),
-    dailyPnl: toNum(m[9]),
-    positionId: m[10],
+    changePct: null,
+    unrealizedPnl: toNum(m[7]),
+    dailyPnl: toNum(m[8]),
+    positionId: m[9],
   };
 }
 

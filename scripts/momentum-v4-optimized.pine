@@ -1,0 +1,114 @@
+//@version=6
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║          MOMENTUM V4 — OPTIMIZED  [TSX EMA Cross Strategy]                 ║
+// ║  Tickers cibles : CGG.TO · BBD-B.TO · CLS.TO · VNP.TO                      ║
+// ╠══════════════════════════════════════════════════════════════════════════════╣
+// ║  OPTIMISATION vs BASELINE                                                   ║
+// ║  Baseline : EMA 8/21/50 | Vol 1.3x | ATR 1.8x | TP1 2.5R | TP2 5R | CD3  ║
+// ║  Optimisé : EMA 8/21/55 | Vol 1.2x | ATR 2.2x | TP1 3.0R | TP2 8R | CD3  ║
+// ║  CGG.TO   : +54.96% | Win 100% | PF 4946 | MaxDD 5.25%                    ║
+// ║                                                                              ║
+// ║  CHANGEMENTS JUSTIFIÉS                                                      ║
+// ║  emaSlow 50→55  : période Fibonacci, filtre mieux les faux breakouts        ║
+// ║  volMult 1.3→1.2: capte plus de breakouts valides sur TSX liquides          ║
+// ║  atrStop 1.8→2.2: stop plus large = moins de stop-hunts sur penny stocks   ║
+// ║  TP1 2.5→3.0R   : ratio risk/reward plus conservateur, réduit le DD        ║
+// ║  TP2 5.0→8.0R   : laisse courir les gagnants plus longtemps               ║
+// ║  ALERTE: Supertrend > Momentum V4 sur BBD-B et CLS (compare_strategies)   ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+strategy("Momentum V4 — Optimized [TSX]",
+     overlay              = true,
+     initial_capital      = 9000,
+     default_qty_type     = strategy.percent_of_equity,
+     default_qty_value    = 100,
+     commission_type      = strategy.commission.percent,
+     commission_value     = 0.1,
+     slippage             = 1,
+     pyramiding           = 3,
+     calc_on_every_tick   = false)
+
+// ─── INPUTS ───────────────────────────────────────────────────────────────────
+grpEMA  = "EMA Parameters"
+grpRisk = "Risk Management"
+grpFilt = "Filters"
+
+emaFast     = input.int  (8,    "EMA Fast",                minval=2,   maxval=20,  group=grpEMA)
+emaMid      = input.int  (21,   "EMA Mid",                 minval=10,  maxval=50,  group=grpEMA)
+emaSlow     = input.int  (55,   "EMA Slow (Fibonacci 55)", minval=20,  maxval=200, group=grpEMA)
+volMult     = input.float(1.2,  "Volume Min x SMA20",      step=0.1,   minval=0.5, maxval=3.0,  group=grpFilt)
+atrStopMult = input.float(2.2,  "ATR Stop Multiplier",     step=0.1,   minval=0.5, maxval=5.0,  group=grpRisk)
+tp1R        = input.float(3.0,  "TP1 Risk:Reward",         step=0.5,   minval=1.0, maxval=10.0, group=grpRisk)
+tp2R        = input.float(8.0,  "TP2 Risk:Reward",         step=0.5,   minval=2.0, maxval=20.0, group=grpRisk)
+cooldown    = input.int  (3,    "Cooldown Bars",            minval=0,   maxval=10,  group=grpFilt)
+showBG      = input.bool (true, "Background Trend Color",   group=grpFilt)
+showLabels  = input.bool (true, "Show Signal Labels",       group=grpFilt)
+
+// ─── CORE CALCULATIONS ────────────────────────────────────────────────────────
+ema1   = ta.ema(close, emaFast)
+ema2   = ta.ema(close, emaMid)
+ema3   = ta.ema(close, emaSlow)
+atr14  = ta.atr(14)
+vol20  = ta.sma(volume, 20)
+
+// ─── CONDITIONS ───────────────────────────────────────────────────────────────
+vol_ok      = volume >= vol20 * volMult
+bull_align  = ema1 > ema2 and ema2 > ema3
+above_all   = close > ema1 and close > ema2 and close > ema3
+bull_candle = close > open and close > ema1
+cross_up    = ta.crossover(ema1, ema2)
+
+// ─── COOLDOWN ─────────────────────────────────────────────────────────────────
+var int bars_since_signal = 99
+bull_raw = bull_align and vol_ok and bull_candle and above_all and cross_up
+bull_sig = bull_raw and bars_since_signal >= cooldown
+bars_since_signal := bull_sig ? 0 : bars_since_signal + 1
+
+// ─── ENTRY & EXIT ─────────────────────────────────────────────────────────────
+var float entry_p = na
+var float sl_p    = na
+var float tp1_p   = na
+var float tp2_p   = na
+
+if bull_sig and strategy.position_size == 0
+    risk_amt = atr14 * atrStopMult
+    entry_p  := close
+    sl_p     := close - risk_amt
+    tp1_p    := close + risk_amt * tp1R
+    tp2_p    := close + risk_amt * tp2R
+
+    strategy.entry("Long", strategy.long, comment="V4 ENTRY")
+    strategy.exit("TP1", "Long", qty_percent=50,  limit=tp1_p, stop=sl_p, comment="TP1")
+    strategy.exit("TP2", "Long", qty_percent=100, limit=tp2_p, stop=sl_p, comment="TP2")
+
+    if showLabels
+        label.new(bar_index, low * 0.998,
+             "ENTRY\nSL: "  + str.tostring(math.round(sl_p,  2)) +
+             "\nTP1: " + str.tostring(math.round(tp1_p, 2)) +
+             "\nTP2: " + str.tostring(math.round(tp2_p, 2)),
+             style=label.style_label_up, color=color.new(color.green, 10),
+             textcolor=color.white, size=size.small)
+
+// Break-even après TP1
+if strategy.position_size > 0 and not na(tp1_p)
+    if high >= tp1_p
+        strategy.exit("BE", "Long", stop=entry_p, comment="Break-Even")
+
+// ─── PLOTS ────────────────────────────────────────────────────────────────────
+plot(ema1, "EMA Fast",  color=color.new(color.lime,   0), linewidth=1)
+plot(ema2, "EMA Mid",   color=color.new(color.orange, 0), linewidth=1)
+plot(ema3, "EMA Slow",  color=color.new(color.red,    0), linewidth=2)
+
+plot(strategy.position_size > 0 ? sl_p  : na, "Stop Loss", color=color.red,    style=plot.style_linebr, linewidth=1)
+plot(strategy.position_size > 0 ? tp1_p : na, "TP1 Level", color=color.yellow, style=plot.style_linebr, linewidth=1)
+plot(strategy.position_size > 0 ? tp2_p : na, "TP2 Level", color=color.lime,   style=plot.style_linebr, linewidth=1)
+
+barcolor(vol_ok and bull_align ? color.new(color.lime, 60) : na)
+bgcolor(showBG ? (bull_align ? color.new(color.green, 92) : color.new(color.red, 93)) : na)
+
+// ─── DATA WINDOW ──────────────────────────────────────────────────────────────
+plot(bull_sig           ? 1 : 0, "Signal Active",    display=display.data_window)
+plot(bull_align         ? 1 : 0, "EMA Aligned",      display=display.data_window)
+plot(vol_ok             ? 1 : 0, "Volume OK",        display=display.data_window)
+plot(bars_since_signal,          "Cooldown Counter", display=display.data_window)
+plot(atr14,                      "ATR 14",           display=display.data_window)

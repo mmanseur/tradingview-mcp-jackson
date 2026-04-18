@@ -23,9 +23,12 @@
     "test:count": "node --test --test-reporter=spec tests/e2e.test.js 2>&1 | tail -5",
     "scan": "node src/scripts/scanner_v4.js",
     "brief": "node src/scripts/morning-brief.js",
-    "test:mail": "node src/scripts/test_mailer.js"
+    "test:mail": "node src/scripts/test_mailer.js",
+    "agent": "node src/scripts/trading-agent.js",
+    "optimize": "node src/scripts/strategy-optimizer.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.54.0",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "chrome-remote-interface": "^0.33.2",
     "nodemailer": "^8.0.5"

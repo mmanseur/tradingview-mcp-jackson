@@ -1,0 +1,57 @@
+name: Scan IA TSX — positions IBKR
+
+on:
+  push:
+    branches: [trading_routine]
+    paths:
+      - positions.json        # se déclenche UNIQUEMENT si ce fichier change
+  schedule:
+    - cron: "30 13 * * 1-5"
+
+jobs:
+  scan:
+    name: Momentum V4 + Claude API + Email
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: src/server_scan/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r src/server_scan/requirements.txt
+
+      - name: Run scan cloud (with retry)
+        env:
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_USER:         ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RECIPIENT_EMAIL:    ${{ secrets.RECIPIENT_EMAIL }}
+        run: |
+          for i in 1 2 3; do
+            echo "Attempt $i..."
+            python src/server_scan/scan_cloud.py && break
+            echo "Failed attempt $i"
+            sleep 5
+          done
+      
+          if [ $i -eq 3 ]; then
+            echo "All retries failed"
+            exit 1
+          fi
+
+      - name: Upload log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-error-log
+          path: "*.log"
+          retention-days: 7

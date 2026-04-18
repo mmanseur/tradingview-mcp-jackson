@@ -1,0 +1,164 @@
+//@version=6
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  UNIFIED STRATEGY — TSX Swing Trading                                      ║
+// ║  Auto-switch par ticker (même logique que l'indicateur unifié)             ║
+// ║    • BBD-B / CLS  → Supertrend (ATR×3, period 10)                         ║
+// ║    • WPM / AEM    → Gold Momentum Pro (Donchian turtle 13/26/55)           ║
+// ║    • Autres       → Momentum V4 (EMA cross 8/21/50)                       ║
+// ║                                                                             ║
+// ║  Usage: charger sur BBD-B.TO, CLS.TO, WPM.TO, AEM.TO, CGG.TO, VNP.TO     ║
+// ║  puis ouvrir Strategy Tester pour voir les vrais résultats                 ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+strategy("Unified Strategy [TSX Swing]",
+     overlay                 = true,
+     initial_capital         = 9000,
+     default_qty_type        = strategy.percent_of_equity,
+     default_qty_value       = 95,
+     commission_type         = strategy.commission.percent,
+     commission_value        = 0.1,
+     slippage                = 2,
+     pyramiding              = 3,
+     calc_on_every_tick      = false,
+     process_orders_on_close = false)
+
+// ─── AUTO-DETECT ──────────────────────────────────────────────
+isGoldTicker       = str.contains(syminfo.ticker, "WPM") or str.contains(syminfo.ticker, "AEM")
+isSupertrendTicker = str.contains(syminfo.ticker, "BBD") or str.contains(syminfo.ticker, "CLS")
+
+// ─── EMAs ─────────────────────────────────────────────────────
+f = isGoldTicker ? 13 : 8
+m = isGoldTicker ? 26 : 21
+s = isGoldTicker ? 55 : 50
+
+emaFast = ta.ema(close, f)
+emaMid  = ta.ema(close, m)
+emaSlow = ta.ema(close, s)
+atr14   = ta.atr(14)
+
+bull_align = emaFast > emaMid and emaMid > emaSlow
+bear_align = emaFast < emaMid and emaMid < emaSlow
+
+// ─── MOMENTUM V4 ─────────────────────────────────────────────
+vol_ok       = volume >= ta.sma(volume, 20) * 1.3
+above_all    = close > emaFast and close > emaMid and close > emaSlow
+below_all    = close < emaFast and close < emaMid and close < emaSlow
+bull_candle  = close > open and close > emaFast
+bear_candle  = close < open and close < emaFast
+ema_cross_up = ta.crossover(emaFast, emaMid)
+ema_cross_dn = ta.crossunder(emaFast, emaMid)
+
+var int bars_since = 99
+v4_brk_raw  = bull_align and vol_ok and bull_candle and above_all and ema_cross_up
+v4_sell_raw = bear_align and vol_ok and bear_candle and below_all and ema_cross_dn
+v4_brk      = v4_brk_raw  and bars_since >= 3
+v4_sell     = v4_sell_raw and bars_since >= 3
+if v4_brk or v4_sell
+    bars_since := 0
+else
+    bars_since += 1
+v4_pb = bull_align and low <= emaFast * 1.005 and close > emaFast and close > open and not v4_brk
+
+// ─── GOLD MOMENTUM PRO ───────────────────────────────────────
+[_dp, _dm, adx] = ta.dmi(14, 14)
+adxOk      = adx > 20.0
+entryHigh  = ta.highest(high[1], 55)
+addHigh    = ta.highest(high[1], 20)
+exitLow    = ta.lowest(low[1],   20)
+chandelier = ta.highest(high, 22) - atr14 * 4.5
+
+var bool gp_inPos    = false
+var int  gp_entryBar = 0
+var int  gp_adds     = 0
+
+gp_brk = close > entryHigh and bull_align and adxOk and not gp_inPos
+gp_pb  = close > emaFast and low < emaFast and close > entryHigh[5] and bull_align and adxOk and not gp_brk and not gp_inPos
+
+if (gp_brk or gp_pb) and not gp_inPos
+    gp_inPos    := true
+    gp_entryBar := bar_index
+    gp_adds     := 0
+
+gp_add = gp_inPos and close > addHigh and adxOk and gp_adds < 2 and bar_index - gp_entryBar >= 10
+if gp_add
+    gp_adds += 1
+
+gp_exit = gp_inPos and (close < exitLow or close < chandelier)
+if gp_exit
+    gp_inPos := false
+    gp_adds  := 0
+
+// ─── SUPERTREND ───────────────────────────────────────────────
+st_atr        = ta.atr(10)
+st_hl2        = (high + low) / 2
+st_basicUpper = st_hl2 + 3.0 * st_atr
+st_basicLower = st_hl2 - 3.0 * st_atr
+
+var float st_upperBand = na
+var float st_lowerBand = na
+var int   st_trend     = 1
+
+st_upperBand := (na(st_upperBand[1]) or st_basicUpper < st_upperBand[1] or close[1] > st_upperBand[1]) ? st_basicUpper : st_upperBand[1]
+st_lowerBand := (na(st_lowerBand[1]) or st_basicLower > st_lowerBand[1] or close[1] < st_lowerBand[1]) ? st_basicLower : st_lowerBand[1]
+st_trend     := (st_trend[1] == -1 and close > st_upperBand[1]) ? 1 : (st_trend[1] == 1 and close < st_lowerBand[1]) ? -1 : st_trend[1]
+
+st_line    = st_trend == 1 ? st_lowerBand : st_upperBand
+st_bull    = st_trend == 1
+st_crossUp = st_trend == 1  and st_trend[1] == -1
+st_crossDn = st_trend == -1 and st_trend[1] == 1
+
+// ─── SIGNAUX UNIFIÉS ──────────────────────────────────────────
+sig_entry_gold = gp_brk or gp_pb
+sig_entry_st   = st_crossUp
+sig_entry_v4   = v4_brk or v4_pb
+sig_entry = isGoldTicker ? sig_entry_gold : isSupertrendTicker ? sig_entry_st : sig_entry_v4
+
+sig_add = isGoldTicker ? gp_add : false
+
+sig_exit_gold = gp_exit
+sig_exit_st   = st_crossDn
+sig_exit_v4   = v4_sell
+sig_exit = isGoldTicker ? sig_exit_gold : isSupertrendTicker ? sig_exit_st : sig_exit_v4
+
+// ─── COMMENT ──────────────────────────────────────────────────
+entry_comment = isSupertrendTicker ? "ST BRK" : isGoldTicker ? "GP BRK" : "V4 BRK"
+exit_comment  = isSupertrendTicker ? "ST EXIT" : isGoldTicker ? "GP EXIT" : "V4 SELL"
+
+// ─── ORDRES ───────────────────────────────────────────────────
+if sig_entry and strategy.position_size == 0
+    strategy.entry("Long", strategy.long, comment = entry_comment)
+
+if sig_add and strategy.position_size > 0
+    strategy.entry("Add", strategy.long, comment = "ADD")
+
+if sig_exit and strategy.position_size > 0
+    strategy.close_all(comment = exit_comment)
+
+// ─── STOP INITIAL (ATR) ───────────────────────────────────────
+var float entry_stop = na
+if sig_entry and strategy.position_size == 0
+    entry_stop := close - atr14 * 2.0
+if strategy.position_size == 0
+    entry_stop := na
+if not na(entry_stop) and strategy.position_size > 0
+    strategy.exit("Stop", "Long", stop = entry_stop, comment = "STOP")
+
+// ─── PLOTS ────────────────────────────────────────────────────
+plot(emaFast,                           title="EMA Fast",    color=color.new(color.lime,   0), linewidth=1)
+plot(emaMid,                            title="EMA Mid",     color=color.new(color.orange, 0), linewidth=1)
+plot(emaSlow,                           title="EMA Slow",    color=color.new(color.red,    0), linewidth=2)
+plot(isGoldTicker ? entryHigh : na,     title="Donchian Hi", color=color.new(color.green,  0))
+plot(isGoldTicker ? exitLow   : na,     title="Donchian Lo", color=color.new(color.red,    0))
+plot(isGoldTicker ? chandelier : na,    title="Chandelier",  color=color.new(color.aqua,   0), style=plot.style_linebr)
+st_color = st_bull ? color.new(color.green, 0) : color.new(color.red, 0)
+plot(isSupertrendTicker ? st_line : na, title="Supertrend",  color=st_color, linewidth=2, style=plot.style_linebr)
+
+// ─── LABELS ───────────────────────────────────────────────────
+if sig_entry and strategy.position_size == 0
+    label.new(bar_index, low * 0.998, "ENTRY", style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small)
+if sig_exit and strategy.position_size > 0
+    label.new(bar_index, high * 1.002, "EXIT", style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
+
+// ─── BACKGROUND ───────────────────────────────────────────────
+bg_st  = st_bull ? color.new(color.green, 92) : color.new(color.red, 92)
+bg_std = bull_align ? color.new(color.green, 92) : bear_align ? color.new(color.red, 92) : color(na)
+bgcolor(isSupertrendTicker ? bg_st : bg_std)
