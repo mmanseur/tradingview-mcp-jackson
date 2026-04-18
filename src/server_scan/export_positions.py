@@ -93,7 +93,8 @@ def git_push(data: dict) -> bool:
     """Commit et push positions.json sur GitHub."""
     n        = len(data["positions"])
     tickers  = ", ".join(p["ticker"] for p in data["positions"])
-    msg      = f"positions: {n} positions ({tickers}) — {data['exported_at'][:10]}"
+    ##msg      = f"positions: {n} positions ({tickers}) — {data['exported_at'][:10]}"
+    msg      = f"chore: update last_report {data['exported_at'][:10]}"
 
     cmds = [
         ["git", "-C", str(REPO_DIR), "add", str(OUTPUT_FILE)],
