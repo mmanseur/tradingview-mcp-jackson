@@ -8,3 +8,4 @@ temp_*
 discovery-log.json
 .env
 .env.local
+.last_positions_sha
